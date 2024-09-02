@@ -7,34 +7,25 @@ from dash import Dash, html, dcc, callback, Output, Input
 import plotly.express as px
 import pandas as pd
 
-# df = pd.read_csv('https://raw.githubusercontent.com/plotly/datasets/master/gapminder_unfiltered.csv')
-
 hist = []
-
-# Evento de controle
-stop_event = Event()
 
 lock = Lock()
 
 df = pd.DataFrame(columns=['quant', 'tempo'])
 
-
-
-def comprarProduto(lambT, lambQ):
-    # data = []
-    # while not stop_event.is_set():
-    tempo = geracaoTempo(lambT)
-    quant = geracaoQuant(lambQ)
+def comprarProduto():
+    tempo = geracaoTempo()
+    quant = geracaoQuant()
     data = {"quant": quant, "tempo": tempo}
-    # time.sleep(tempo)
+    time.sleep(tempo)
     return data
-    # print(data)
-    # queue.put(data)
 
-def geracaoTempo(lamb):
-    return random.expovariate(lamb)
+def geracaoTempo():
+    return random.expovariate(1)
+    # return random.normalvariate(1, 2)
     
-def geracaoQuant(lamb):
+def geracaoQuant():
+    lamb = 1
     quant = random.expovariate(lamb)
     quant = round(quant) + 1
     if quant < 1: quant = 1
@@ -42,66 +33,35 @@ def geracaoQuant(lamb):
 
 def generate_random_numbers(dff):
     tempo_total = 0
-    quant_prod = 100
+    quant_prod = 1000
     while quant_prod > 0:
-        data = comprarProduto(1, 1)
+        data = comprarProduto()
         data['tempo'] = tempo_total + data['tempo']
         tempo_total = data['tempo']
         quant_prod = quant_prod - data['quant']
         with lock:
             new_row = {'quant': quant_prod, 'tempo': data['tempo']}
             dff.loc[len(dff)] = new_row
-            print(f"Thread {data['quant']} added {data['tempo']}")
-        # time.sleep(1)
+            print(f"Quant {data['quant']}. Tempo {data['tempo']}")
 
 def main():
-    # Parâmetros das variáveis aleatórias geradas
-    lambT = 1
-    lambQ = 1
     
-    # Quantidade inicial de produtos
-    # quantidade_produtos = 1000
-    
-    # Fila
-    # queue = Queue()
-    
-    # Threads
-    # produto = Thread(target=comprarProduto, args=(queue, lambT, lambQ))
-    # comprar = Thread(target=simular_compra, args=(queue, quantidade_produtos))
-    
-    # Inicia
-    # produto.start()
-    # comprar.start()
-    
-    # Parar 
-    # comprar.join()
-    # produto.join()
-    
-    thread = Thread(target=generate_random_numbers, args=(df,))
+    thread = Thread(target=generate_random_numbers, args=(df, ))
     thread.start()
         
     app = Dash()
 
     app.layout = [
-        html.H1(children='Title of Dash App', style={'textAlign':'center'}),
-        # dcc.Dropdown(df.country.unique(), 'Canada', id='dropdown-selection'),
+        html.H1(children='Compra de produtos', style={'textAlign':'center'}),
         dcc.Graph(id='graph-content'),
         dcc.Interval(
             id='interval-component',
-            interval=1*500, # in milliseconds
+            interval=1*500,
             n_intervals=0
         )
     ]
     
     app.run(debug=True)
-    
-    # try:
-    #     while True:
-    #         with lock:
-    #             print(df)
-    #         time.sleep(5)
-    # except KeyboardInterrupt:
-    #     print("Stopping the monitoring.")
 
 
 @callback(
@@ -109,7 +69,12 @@ def main():
     Input('interval-component', 'n_intervals')
 )
 def update_graph(n):
-    return px.line(df, x='tempo', y='quant')
+    
+    fig = px.line(df, x='tempo', y='quant')
+    
+    fig.update_layout(uirevision='some-constant')
+    
+    return fig
 
 
 if __name__ == "__main__":

@@ -10,6 +10,8 @@ import pandas as pd
 from datetime import datetime
 import mysql.connector
 import sqlalchemy
+from plotly.subplots import make_subplots
+import plotly.graph_objs as go
 
 lock = Lock()
 
@@ -22,14 +24,14 @@ database = "supermercado"
 def select():
     # connection = mysql.connector.connect(host=host, user=user, password=password, database=database)
     engine = sqlalchemy.create_engine('mysql+pymysql://root:root@localhost:3306/supermercado')
-    query = "SELECT horario AS data, quantidade_estoque AS quant FROM consumo_produtos ORDER BY ID ASC"
+    query = "SELECT horario AS data, quantidade_estoque AS quant, id_produto FROM consumo_produtos ORDER BY ID ASC"
     df = pd.read_sql(query, con = engine)
     return df
 
-df = pd.DataFrame(columns=['quant', 'data'])
+df = pd.DataFrame(columns=['quant', 'data', 'id_produto'])
 df = select()
 
-def comprarProduto(queue):
+def comprarProduto(queue, id_produto):
     while True:
         tempo = geracaoTempo()
         quant = geracaoQuant()
@@ -40,9 +42,9 @@ def comprarProduto(queue):
 
 def obterEstoqueAtual():
     try:
-        quant_estoque = df['quant'].iloc[-1]
+        quant_estoque = [df['quant'].iloc[-1], df['quant'].iloc[-1], df['quant'].iloc[-1], df['quant'].iloc[-1]]
     except:
-        quant_estoque = 200
+        quant_estoque = [200, 200, 200, 200]
     return quant_estoque
 
 def gerarData():
@@ -51,7 +53,7 @@ def gerarData():
     return dt_string
 
 
-def saveDB(quant, date, quant_estoque):
+def saveDB(quant, date, quant_estoque, id_produto):
     try:
         connection = mysql.connector.connect(host=host, user=user, password=password, database=database)
         print("Conectado ao banco de dados MySQL!")
@@ -59,7 +61,7 @@ def saveDB(quant, date, quant_estoque):
         # Criando um cursor para executar consultas
         cursor = connection.cursor()
         
-        consulta = f"INSERT INTO consumo_produtos (horario, quantidade_comprada, quantidade_estoque) VALUES ('{date}', {quant}, {quant_estoque});"
+        consulta = f"INSERT INTO consumo_produtos (horario, id_produto, quantidade_comprada, quantidade_estoque) VALUES ('{date}', {id_produto}, {quant}, {quant_estoque});"
         cursor.execute(consulta)
         
         connection.commit()
@@ -81,10 +83,10 @@ def geracaoQuant():
     quant = random.randint(1, 5)
     return quant
 
-def generate_random_numbers(queue, dff, quant_estoque):
+def generate_random_numbers(queue, dff, quant_estoque, id_produto):
     print("Inciou")
     while quant_estoque > 0:
-        with lock:
+        # with lock:
             data = queue.get()
             quant = data['quant']
             date = data['data']
@@ -92,10 +94,10 @@ def generate_random_numbers(queue, dff, quant_estoque):
             if quant_estoque < 0:
                 quant = quant + quant_estoque
                 quant_estoque = 0
-            new_row = {'quant': quant_estoque, 'data': date}
+            new_row = {'quant': quant_estoque, 'data': date, 'id_produto': id_produto}
             dff.loc[len(dff)] = new_row
-            saveDB(quant, date, quant_estoque)
-            print(f"Quant {quant}. Quant_Estoque {quant_estoque}  Data {date}")
+            saveDB(quant, date, quant_estoque, id_produto)
+            print(f"Quant {quant}. Quant_Estoque {quant_estoque}  Data {date} id_produto {id_produto}")
             if quant_estoque == 0:
                 quant_estoque = 200
 
@@ -103,38 +105,58 @@ def main():
     quant_estoque = obterEstoqueAtual()
     
     # Fila
-    queue = Queue()
+    queue = [Queue(), Queue(), Queue(), Queue()]
+    produto = ["","","",""]
+    thread = ["","","",""]
     
-    produto = Thread(target=comprarProduto, args=(queue, ))
-    produto.start()
-    
-    thread = Thread(target=generate_random_numbers, args=(queue, df, quant_estoque, ))
-    thread.start()
+    for i in range(1, 5):
+        produto[i-1] = Thread(target=comprarProduto, args=(queue[i-1], i, ))
+        produto[i-1].start()
+        
+        thread[i-1] = Thread(target=generate_random_numbers, args=(queue[i-1], df, quant_estoque[i-1], i ))
+        thread[i-1].start()
         
     app = Dash()
 
-    app.layout = [
+    app.layout =  html.Div([
         html.H1(children='Monitoramento de estoque', style={'textAlign':'center'}),
-        dcc.Graph(id='graph-content'),
+        dcc.Graph(id='scatter-plot'),
         dcc.Interval(
             id='interval-component',
-            interval=1*500,
+            interval=500,
             n_intervals=0
-        )
-    ]
-    
+        ),
+    ])
+        
     app.run(debug=True, use_reloader=False)
 
 
 @callback(
-    Output('graph-content', 'figure'),
-    Input('interval-component', 'n_intervals')
+    Output('scatter-plot', 'figure'),
+    [Input('interval-component', 'n_intervals')]
 )
 def update_graph(n):
     
-    fig = px.line(df, x='data', y='quant')
+    fig = make_subplots(rows=2, cols=2)
     
-    fig.update_layout(uirevision='some-constant')
+    dff = df
+    
+    print("")
+    
+    # grafico1 = px.line(df, x='data', y='quant')
+    grafico1 = go.Scatter(x=dff['data'].loc[dff['id_produto'] == 1], y=dff['quant'].loc[dff['id_produto'] == 1], mode="lines")
+    grafico2 = go.Scatter(x=dff['data'].loc[dff['id_produto'] == 2], y=dff['quant'].loc[dff['id_produto'] == 2], mode="lines")
+    grafico3 = go.Scatter(x=dff['data'].loc[dff['id_produto'] == 3], y=dff['quant'].loc[dff['id_produto'] == 3], mode="lines")
+    grafico4 = go.Scatter(x=dff['data'].loc[dff['id_produto'] == 4], y=dff['quant'].loc[dff['id_produto'] == 4], mode="lines")
+    # grafico2 = go.scatter(df, x='data', y='quant', mode="lines")
+    # grafico2 = px.line(df, x='data', y='quant')
+    
+    fig.add_trace(grafico1, row=1, col=1)
+    fig.add_trace(grafico2, row=1, col=2)
+    fig.add_trace(grafico3, row=2, col=1)
+    fig.add_trace(grafico4, row=2, col=2)
+    
+    fig.update_layout(uirevision='some-constant', height=800, showlegend=False)
     
     return fig
 

@@ -1,0 +1,72 @@
+TypeError: `id` prop must be a string or dict, not Figure({
+    'data': [{'mode': 'lines',
+              'type': 'scatter',
+              'x': array([Timestamp('2024-09-25 21:34:40'), Timestamp('2024-09-25 21:34:42'),
+                          Timestamp('2024-09-25 21:34:43'), ..., '2024-09-25 22:21:09.651',
+                          '2024-09-25 22:21:10.149', '2024-09-25 22:21:11.152'], dtype=object),
+              'y': array([196, 191, 189, ..., 107, 104,  99])}],
+    'layout': {'autosize': True,
+               'showlegend': False,
+               'template': '...',
+               'title': {'text': 'Camarão'},
+               'uirevision': 'some-constant',
+               'xaxis': {'autorange': True},
+               'yaxis': {'autorange': True}}
+})
+
+Traceback (most recent call last)
+File "c:\Users\Helio\Documents\GitHub\Previsao_Consumo_Produtos\teste_telas.py", line 193, in update_graph
+return [html.Div(dcc.Graph((elemento.grafico))) for elemento in graficos], [html.P(teste) for teste in ranking]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\Helio\AppData\Roaming\Python\Python312\site-packages\dash\development\base_component.py", line 425, in wrapper
+return func(*args, **kwargs)
+       ^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\Helio\AppData\Roaming\Python\Python312\site-packages\dash\dcc\Graph.py", line 397, in __init__
+super(Graph, self).__init__(**args)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\Helio\AppData\Roaming\Python\Python312\site-packages\dash\development\base_component.py", line 171, in __init__
+raise TypeError(f"`id` prop must be a string or dict, not {v!r}")
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: `id` prop must be a string or dict, not Figure({
+'data': [{'mode': 'lines',
+'type': 'scatter',
+'x': array([Timestamp('2024-09-25 21:34:40'), Timestamp('2024-09-25 21:34:42'),
+Timestamp('2024-09-25 21:34:43'), ..., '2024-09-25 22:21:09.651',
+'2024-09-25 22:21:10.149', '2024-09-25 22:21:11.152'], dtype=object),
+'y': array([196, 191, 189, ..., 107, 104, 99])}],
+'layout': {'autosize': True,
+'showlegend': False,
+'template': '...',
+'title': {'text': 'Camarão'},
+'uirevision': 'some-constant',
+'xaxis': {'autorange': True},
+'yaxis': {'autorange': True}}
+})
+This is the Copy/Paste friendly version of the traceback.
+
+Traceback (most recent call last):
+  File "c:\Users\Helio\Documents\GitHub\Previsao_Consumo_Produtos\teste_telas.py", line 193, in update_graph
+    return [html.Div(dcc.Graph((elemento.grafico))) for elemento in graficos], [html.P(teste) for teste in ranking]
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Helio\AppData\Roaming\Python\Python312\site-packages\dash\development\base_component.py", line 425, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Helio\AppData\Roaming\Python\Python312\site-packages\dash\dcc\Graph.py", line 397, in __init__
+    super(Graph, self).__init__(**args)
+  File "C:\Users\Helio\AppData\Roaming\Python\Python312\site-packages\dash\development\base_component.py", line 171, in __init__
+    raise TypeError(f"`id` prop must be a string or dict, not {v!r}")
+TypeError: `id` prop must be a string or dict, not Figure({
+    'data': [{'mode': 'lines',
+              'type': 'scatter',
+              'x': array([Timestamp('2024-09-25 21:34:40'), Timestamp('2024-09-25 21:34:42'),
+                          Timestamp('2024-09-25 21:34:43'), ..., '2024-09-25 22:21:09.651',
+                          '2024-09-25 22:21:10.149', '2024-09-25 22:21:11.152'], dtype=object),
+              'y': array([196, 191, 189, ..., 107, 104,  99])}],
+    'layout': {'autosize': True,
+               'showlegend': False,
+               'template': '...',
+               'title': {'text': 'Camarão'},
+               'uirevision': 'some-constant',
+               'xaxis': {'autorange': True},
+               'yaxis': {'autorange': True}}
+})

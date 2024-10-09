@@ -38,7 +38,7 @@ def obterProdutos():
 df = pd.DataFrame(columns=['quant', 'data', 'id_produto'])
 df = select()
 
-produtos = pd.DataFrame(columns=['ID', 'nome_produto'])
+produtos = pd.DataFrame(columns=['id_produto', 'nome_produto'])
 produtos = obterProdutos()
 
 def comprarProduto(queue, id_produto):
@@ -52,9 +52,9 @@ def comprarProduto(queue, id_produto):
 
 def obterEstoqueAtual():
     try:
-        quant_estoque = [df['quant'].iloc[-1], df['quant'].iloc[-1], df['quant'].iloc[-1], df['quant'].iloc[-1]]
+        quant_estoque = [df['quant'].iloc[-1] for i in range(len(produtos))]
     except:
-        quant_estoque = [200, 200, 200, 200]
+        quant_estoque = [200 for i in range(len(produtos))]
     return quant_estoque
 
 def gerarData():
@@ -110,31 +110,33 @@ def generate_random_numbers(queue, dff, quant_estoque, id_produto):
             # print(f"Quant {quant}. Quant_Estoque {quant_estoque}  Data {date} id_produto {id_produto}")
             if quant_estoque == 0:
                 quant_estoque = 200
+                
+app = Dash(suppress_callback_exceptions=True, external_stylesheets=['https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css'])
 
-def main(): 
-    quant_estoque = obterEstoqueAtual()
-    
-    # Fila
-    queue = [Queue(), Queue(), Queue(), Queue()]
-    produto = ["","","",""]
-    thread = ["","","",""]
-    
-    for i in range(1, 5):
-        produto[i-1] = Thread(target=comprarProduto, args=(queue[i-1], i, ))
-        produto[i-1].start()
-        
-        thread[i-1] = Thread(target=generate_random_numbers, args=(queue[i-1], df, quant_estoque[i-1], i ))
-        thread[i-1].start()
-        
-    app = Dash(suppress_callback_exceptions=True, external_stylesheets=['https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css'])
-
-    app.layout =  html.Div([
+default_layout = html.Div([
         dcc.Location(id='url', refresh=False),
         dcc.Location(id='url2', refresh=False),
         html.Button('Ir para Page 2', id='meu-botao'),  # O botão que desencadeará o evento
         html.Button('Ir para Page 1', id='botao-page1'),  # O botão que desencadeará o evento
         html.Div(id='page-content'),
     ])
+
+def main(): 
+    quant_estoque = obterEstoqueAtual()
+    
+    # Fila
+    queue = [Queue() for i in range(len(produtos))]
+    produto = ["" for i in range(len(produtos))]
+    thread = ["" for i in range(len(produtos))]
+    
+    for i in range(len(produtos)):
+        produto[i] = Thread(target=comprarProduto, args=(queue[i], produtos["id_produto"].loc[i], ))
+        produto[i].start()
+        
+        thread[i] = Thread(target=generate_random_numbers, args=(queue[i], df, quant_estoque[i], produtos["id_produto"].loc[i] ))
+        thread[i].start()
+
+    app.layout = default_layout
         
     app.run(debug=True, use_reloader=False)
     
@@ -167,13 +169,14 @@ def display_page(pathname):
         layout = html.Div([html.H1(children='Monitoramento de estoque', style={'textAlign':'center'}),
                             dcc.Store(id='data-store'),  
                             html.Div(id='graphs-container', style={'display': 'flex', 'flex-wrap': 'wrap'}),
-                            html.P("Ranking", style={'textAlign':'center'}),
-                            html.Div(id='dynamic-content', style={'textAlign':'center'}),
                             dcc.Interval(
                                 id='interval-component',
-                                interval=1000,
+                                interval=10000,
                                 n_intervals=0,
-                            ),]),
+                            ),
+                            html.P("Ranking", style={'textAlign':'center'}),
+                            html.Div(id='dynamic-content', style={'textAlign':'center'})
+                            ]),
         return layout
     elif pathname == '/page-2':
         layout2 = html.Div([html.H1(children='Monitoramento de estoque', style={'textAlign':'center'}),
@@ -207,6 +210,19 @@ def criar_produto(nome):
                 # print("Conexão fechada")
         except:
             pass
+        
+def criar_threads_produto():
+    quant_estoque = obterEstoqueAtual()
+    # Fila
+    queue = Queue()
+    produto = ""
+    thread = ""
+    
+    produto = Thread(target=comprarProduto, args=(queue, produtos["id_produto"].iloc[-1], ))
+    produto.start()
+    
+    thread = Thread(target=generate_random_numbers, args=(queue, df, quant_estoque[-1], produtos["id_produto"].iloc[-1] ))
+    thread.start()
 
 #------------------------------------------------------ Criação de Produto ----------------------------------------------------------------#
 @callback(
@@ -216,6 +232,14 @@ def criar_produto(nome):
 )
 def atualizar_texto_html(n_clicks, nome_produto, teste):
     criar_produto(nome_produto)
+    global produtos
+    global df
+    print(produtos)
+    produtos = obterProdutos()
+    print(produtos)
+    df = select()
+    criar_threads_produto()
+    generate_update()
 
 #------------------------------------------------------ Criação Gráficos ----------------------------------------------------------------#
 @callback(
@@ -238,6 +262,38 @@ def update_layout(n):
 
 #------------------------------------------------------ Atualização Gráficos ----------------------------------------------------------------#
 
+def generate_update():
+        # Remove o callback existente para gráficos
+    # print(app.callback_map)
+    if 'update_graphs' in app.callback_map:
+        print("asfasfasfasfafafaafasf")
+        del app.callback_map['update_graphs']
+    print(app.callback_map)
+        
+    # Callback para atualizar cada gráfico com base nos produtos
+    @callback(
+        [Output(f'graph-{i}', 'figure') for i in range(len(produtos))],
+        [Input('interval-component', 'n_intervals')]
+    )
+    def update_graphs(n):
+        
+        dff = df
+        
+        print(len(produtos))
+        
+        graficos = []
+        
+        for indice, linha in produtos.iterrows():
+            id = linha.id_produto
+            name = linha.nome_produto
+            graficos.append(GraficoProduto(go.Figure(data=go.Scatter(x=dff['data'].loc[dff['id_produto'] == id], y=dff['quant'].loc[dff['id_produto'] == id], mode="lines")),id,name))
+
+        
+        for fig in graficos:
+                fig.grafico.update_layout(uirevision='some-constant', showlegend=False, xaxis_autorange=True, yaxis_autorange=True, autosize=True, title=fig.name)
+        
+        return [graficos[i].grafico for i in range(len(graficos))]
+
 # Callback para atualizar cada gráfico com base nos produtos
 @callback(
     [Output(f'graph-{i}', 'figure') for i in range(len(produtos))],
@@ -246,6 +302,8 @@ def update_layout(n):
 def update_graphs(n):
     
     dff = df
+    
+    print(len(produtos))
     
     graficos = []
     

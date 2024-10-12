@@ -13,6 +13,7 @@ import sqlalchemy
 from plotly.subplots import make_subplots
 import plotly.graph_objs as go
 from grafico_produto import GraficoProduto
+import dash
 
 lock = Lock()
 
@@ -116,8 +117,10 @@ app = Dash(suppress_callback_exceptions=True, external_stylesheets=['https://sta
 default_layout = html.Div([
         dcc.Location(id='url', refresh=False),
         dcc.Location(id='url2', refresh=False),
-        html.Button('Ir para Page 2', id='meu-botao'),  # O botão que desencadeará o evento
-        html.Button('Ir para Page 1', id='botao-page1'),  # O botão que desencadeará o evento
+        html.Button('Home', id='botao-home'),  # O botão que desencadeará o evento
+        html.Button('Adicionar Produtos', id='botao-add-produtos'),  # O botão que desencadeará o evento
+        html.Button('Previsão', id='botao-previsao'),  # O botão que desencadeará o evento
+        html.Button('Configurações', id='botao-config'),  # O botão que desencadeará o evento
         html.Div(id='page-content'),
     ])
 
@@ -142,30 +145,38 @@ def main():
     
 @callback(
     Output('url', 'pathname'),  # O output vai alte rar o pathname da URL
-    Input('meu-botao', 'n_clicks'),  # O input é o número de cliques no botão
+    [Input('botao-home', 'n_clicks'),
+     Input('botao-add-produtos', 'n_clicks'),
+     Input('botao-previsao', 'n_clicks'),
+     Input('botao-config', 'n_clicks'),
+     ],
     Input('url', 'pathname'),  # O input que captura o pathname atual
 )
-def redirecionar_page2(n_clicks, pathname):
-    if n_clicks:  # Verifica se o botão foi clicado
-        return '/page-2'  # Redireciona para page-2
-    return pathname  # Mantém na página inicial se o botão não foi clicado
+def redirecionar_page(n1, n2, n3, n4, pathname):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return dash.no_update
 
-@callback(
-    Output('url2', 'pathname'),  # O output vai alte rar o pathname da URL
-    Input('botao-page1', 'n_clicks'),  # O input é o número de cliques no botão
-    Input('url2', 'pathname'),  # O input que captura o pathname atual
-)
-def redirecionar_page1(n_clicks, pathname):
-    if n_clicks:  # Verifica se o botão foi clicado
-        return '/page-1'  # Redireciona para page-2
-    return pathname  # Mantém na página inicial se o botão não foi clicado
+    # Identifica qual botão foi clicado
+    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+
+    if button_id == 'botao-home' and n1:
+        return '/home'
+    elif button_id == 'botao-add-produtos' and n2:
+        return '/add_produto'
+    elif button_id == 'botao-previsao' and n3:
+        return '/previsao'
+    elif button_id == 'botao-config' and n3:
+        return '/config'
+
+    return pathname
 
 #------------------------------------------------------ Páginas ----------------------------------------------------------------#
 
 @callback(Output('page-content', 'children'),
             Input('url', 'pathname'))
 def display_page(pathname):
-    if pathname == '/page-1':
+    if pathname == '/home':
         layout = html.Div([html.H1(children='Monitoramento de estoque', style={'textAlign':'center'}),
                             dcc.Store(id='data-store'),  
                             html.Div(id='graphs-container', style={'display': 'flex', 'flex-wrap': 'wrap'}),
@@ -178,12 +189,18 @@ def display_page(pathname):
                             html.Div(id='dynamic-content', style={'textAlign':'center'})
                             ]),
         return layout
-    elif pathname == '/page-2':
-        layout2 = html.Div([html.H1(children='Monitoramento de estoque', style={'textAlign':'center'}),
+    elif pathname == '/add_produto':
+        layout2 = html.Div([html.H1(children='Adicionar produtos', style={'textAlign':'center'}),
                             dcc.Input(id='input-nome-produto',type='text', value=''),
                             dcc.Input(id='input-teste',type='text', value=''),
                             html.Button('Criar', id='botao-criar'),  # O botão que desencadeará o evento
                             ]),
+        return layout2
+    elif pathname == '/previsao':
+        layout2 = html.Div([html.H1(children='Previsão', style={'textAlign':'center'})]),
+        return layout2
+    elif pathname == '/config':
+        layout2 = html.Div([html.H1(children='Config', style={'textAlign':'center'}),]),
         return layout2
     else:
         return html.Div('Página inicial')
@@ -270,29 +287,29 @@ def generate_update():
         del app.callback_map['update_graphs']
     print(app.callback_map)
         
-    # Callback para atualizar cada gráfico com base nos produtos
-    @callback(
-        [Output(f'graph-{i}', 'figure') for i in range(len(produtos))],
-        [Input('interval-component', 'n_intervals')]
-    )
-    def update_graphs(n):
+    # # Callback para atualizar cada gráfico com base nos produtos
+    # @callback(
+    #     [Output(f'graph-{i}', 'figure') for i in range(len(produtos))],
+    #     [Input('interval-component', 'n_intervals')]
+    # )
+    # def update_graphs(n):
         
-        dff = df
+    #     dff = df
         
-        print(len(produtos))
+    #     print(len(produtos))
         
-        graficos = []
+    #     graficos = []
         
-        for indice, linha in produtos.iterrows():
-            id = linha.id_produto
-            name = linha.nome_produto
-            graficos.append(GraficoProduto(go.Figure(data=go.Scatter(x=dff['data'].loc[dff['id_produto'] == id], y=dff['quant'].loc[dff['id_produto'] == id], mode="lines")),id,name))
+    #     for indice, linha in produtos.iterrows():
+    #         id = linha.id_produto
+    #         name = linha.nome_produto
+    #         graficos.append(GraficoProduto(go.Figure(data=go.Scatter(x=dff['data'].loc[dff['id_produto'] == id], y=dff['quant'].loc[dff['id_produto'] == id], mode="lines")),id,name))
 
         
-        for fig in graficos:
-                fig.grafico.update_layout(uirevision='some-constant', showlegend=False, xaxis_autorange=True, yaxis_autorange=True, autosize=True, title=fig.name)
+    #     for fig in graficos:
+    #             fig.grafico.update_layout(uirevision='some-constant', showlegend=False, xaxis_autorange=True, yaxis_autorange=True, autosize=True, title=fig.name)
         
-        return [graficos[i].grafico for i in range(len(graficos))]
+    #     return [graficos[i].grafico for i in range(len(graficos))]
 
 # Callback para atualizar cada gráfico com base nos produtos
 @callback(

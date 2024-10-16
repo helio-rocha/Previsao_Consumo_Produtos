@@ -14,33 +14,9 @@ from plotly.subplots import make_subplots
 import plotly.graph_objs as go
 from grafico_produto import GraficoProduto
 import dash
+from database import select, obterProdutos, obterVendas, saveDB, get_options_from_db, criar_produto
 
 lock = Lock()
-
-# Credenciais de acesso ao banco de dados
-host = "localhost"
-user = "root"
-password = "root"
-database = "supermercado"
-
-def select():
-    # connection = mysql.connector.connect(host=host, user=user, password=password, database=database)
-    engine = sqlalchemy.create_engine('mysql+pymysql://root:root@localhost:3306/supermercado')
-    query = "SELECT horario AS data, quantidade_estoque AS quant, id_produto FROM consumo_produtos ORDER BY ID ASC"
-    df = pd.read_sql(query, con = engine)
-    return df
-
-def obterProdutos():
-    engine = sqlalchemy.create_engine('mysql+pymysql://root:root@localhost:3306/supermercado')
-    query = "SELECT ID AS id_produto, nome_produto FROM produtos ORDER BY ID ASC"
-    df = pd.read_sql(query, con = engine)
-    return df
-
-def obterVendas():
-    engine = sqlalchemy.create_engine('mysql+pymysql://root:root@localhost:3306/supermercado')
-    query = "SELECT id_produto, SUM(quantidade_comprada) AS quant_total FROM consumo_produtos GROUP BY id_produto ORDER BY id_produto ASC"
-    df_bar = pd.read_sql(query, con = engine)
-    return df_bar
 
 df = pd.DataFrame(columns=['quant', 'data', 'id_produto'])
 df = select()
@@ -72,30 +48,6 @@ def gerarData():
     dt_string = date.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     return dt_string
 
-
-def saveDB(quant, date, quant_estoque, id_produto):
-    try:
-        connection = mysql.connector.connect(host=host, user=user, password=password, database=database)
-        # print("Conectado ao banco de dados MySQL!")
-        
-        # Criando um cursor para executar consultas
-        cursor = connection.cursor()
-        
-        consulta = f"INSERT INTO consumo_produtos (horario, id_produto, quantidade_comprada, quantidade_estoque) VALUES ('{date}', {id_produto}, {quant}, {quant_estoque});"
-        cursor.execute(consulta)
-        
-        connection.commit()
-            
-    except mysql.connector.Error as err:
-        print("Erro na conexão: {}".format(err))
-    finally:
-        try:
-            if connection:
-                connection.close()
-                # print("Conexão fechada")
-        except:
-            pass
-
 def geracaoTempo():
     return random.expovariate(1)
     
@@ -126,7 +78,7 @@ def generate_random_numbers(queue, quant_estoque, id_produto):
             saveDB(quant, date, quant_estoque, id_produto)
             if quant_estoque == 0:
                 quant_estoque = 200
-                
+
 app = Dash(suppress_callback_exceptions=True, external_stylesheets=['https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css'])
 
 default_layout = html.Div([
@@ -142,19 +94,19 @@ default_layout = html.Div([
     ])
 
 def main(): 
-    quant_estoque = obterEstoqueAtual()
+    # quant_estoque = obterEstoqueAtual()
     
-    # Fila
-    queue = [Queue() for i in range(len(produtos))]
-    produto = ["" for i in range(len(produtos))]
-    thread = ["" for i in range(len(produtos))]
+    # # Fila
+    # queue = [Queue() for i in range(len(produtos))]
+    # produto = ["" for i in range(len(produtos))]
+    # thread = ["" for i in range(len(produtos))]
     
-    for i in range(len(produtos)):
-        produto[i] = Thread(target=comprarProduto, args=(queue[i], produtos["id_produto"].loc[i], ))
-        produto[i].start()
+    # for i in range(len(produtos)):
+    #     produto[i] = Thread(target=comprarProduto, args=(queue[i], produtos["id_produto"].loc[i], ))
+    #     produto[i].start()
         
-        thread[i] = Thread(target=generate_random_numbers, args=(queue[i], quant_estoque[i], produtos["id_produto"].loc[i] ))
-        thread[i].start()
+    #     thread[i] = Thread(target=generate_random_numbers, args=(queue[i], quant_estoque[i], produtos["id_produto"].loc[i] ))
+    #     thread[i].start()
 
     app.layout = default_layout
     
@@ -281,30 +233,6 @@ def update_bar_chart(n_intervals):
     return fig
 
 # --------------------------------------------------------------------------------------------------------------------------------------------#
-    
-def criar_produto(nome):
-    try:
-        connection = mysql.connector.connect(host=host, user=user, password=password, database=database)
-        # print("Conectado ao banco de dados MySQL!")
-        
-        # Criando um cursor para executar consultas
-        cursor = connection.cursor()
-        
-        consulta = f"INSERT INTO produtos (nome_produto) VALUES ('{nome}');"
-        cursor.execute(consulta)
-        
-        connection.commit()
-            
-    except mysql.connector.Error as err:
-        print("Erro na conexão: {}".format(err))
-    finally:
-        try:
-            if connection:
-                connection.close()
-                # print("Conexão fechada")
-        except:
-            pass
-        
 def criar_threads_produto():
     global produtos
     global df
@@ -330,12 +258,17 @@ def criar_threads_produto():
     State('dropdown-produto', 'value'),  # Captura o valor atual do input1
 )
 def adicionar_grafico(n_clicks, selected_items):
+    global selected_itemsGeral
     if selected_items is None or len(selected_items) == 0:
+        selected_itemsGeral = selected_items
         print("Nada selecionado")
         return
     else:
+        selected_itemsGeral = selected_items
         print(f"Opções selecionadas: {selected_items}")
         return 
+    
+
         criar_produto(nome_produto)
         criar_threads_produto()
 
@@ -405,33 +338,6 @@ def ranquamento(df):
     ranking = df.groupby('id_produto').last().reset_index().sort_values(by='quant', ascending=True)['id_produto']#.astype(str).tolist()
     df_merged = pd.merge(ranking, produtos, on='id_produto')
     return df_merged['nome_produto']
-
-#------------------------------------------------------ Busca produto ----------------------------------------------------------------#
-
-def get_options_from_db():
-    try:
-        connection = mysql.connector.connect(host=host, user=user, password=password, database=database)
-        # print("Conectado ao banco de dados MySQL!")
-        
-        # Criando um cursor para executar consultas
-        cursor = connection.cursor()
-        
-        # Consulta SQL
-        cursor.execute("SELECT ID, nome_produto FROM produtos ORDER BY nome_produto ASC")
-        results = cursor.fetchall()
-
-        # Fechando a conexão
-        cursor.close()
-        connection.close()
-
-        # Convertendo resultados para o formato esperado pelo Dropdown
-        options = [{"label": row[1], "value": row[0]} for row in results]
-        return options
-
-    except Exception as e:
-        print(f"Erro ao consultar o banco de dados: {e}")
-        return []
-
 
 if __name__ == "__main__":
     main()

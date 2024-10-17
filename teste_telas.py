@@ -27,6 +27,8 @@ produtos = obterProdutos()
 df_bar = pd.DataFrame(columns=['id_produto', 'quant_total'])
 df_bar = obterVendas()
 
+selected_itemsGeral = []
+
 def comprarProduto(queue, id_produto):
     while True:
         tempo = geracaoTempo()
@@ -84,6 +86,7 @@ app = Dash(suppress_callback_exceptions=True, external_stylesheets=['https://sta
 default_layout = html.Div([
         dcc.Location(id='url', refresh=False),
         dcc.Location(id='url2', refresh=False),
+        dcc.Store(id='dropdown-values'),
         html.Div([
                 html.Button(html.Span("home", className="material-icons"), id='botao-home',),  # O botão que desencadeará o evento
                 html.Button(html.Span("add", className="material-icons"), id='botao-add-produtos'),  # O botão que desencadeará o evento
@@ -94,19 +97,19 @@ default_layout = html.Div([
     ])
 
 def main(): 
-    # quant_estoque = obterEstoqueAtual()
+    quant_estoque = obterEstoqueAtual()
     
-    # # Fila
-    # queue = [Queue() for i in range(len(produtos))]
-    # produto = ["" for i in range(len(produtos))]
-    # thread = ["" for i in range(len(produtos))]
+    # Fila
+    queue = [Queue() for i in range(len(produtos))]
+    produto = ["" for i in range(len(produtos))]
+    thread = ["" for i in range(len(produtos))]
     
-    # for i in range(len(produtos)):
-    #     produto[i] = Thread(target=comprarProduto, args=(queue[i], produtos["id_produto"].loc[i], ))
-    #     produto[i].start()
+    for i in range(len(produtos)):
+        produto[i] = Thread(target=comprarProduto, args=(queue[i], produtos["id_produto"].loc[i], ))
+        produto[i].start()
         
-    #     thread[i] = Thread(target=generate_random_numbers, args=(queue[i], quant_estoque[i], produtos["id_produto"].loc[i] ))
-    #     thread[i].start()
+        thread[i] = Thread(target=generate_random_numbers, args=(queue[i], quant_estoque[i], produtos["id_produto"].loc[i] ))
+        thread[i].start()
 
     app.layout = default_layout
     
@@ -183,12 +186,15 @@ def display_page(pathname):
                             ]),
         return layout
     elif pathname == '/add_produto':
+        global selected_itemsGeral
         dropdown_options = get_options_from_db()
         layout2 = html.Div([html.H1(children='Adicionar produtos', style={'textAlign':'center'}),
+                            dcc.Interval(id='interval-dropdown', interval=1, n_intervals=0, max_intervals=1),  # Executa apenas uma vez no início
                             dcc.Dropdown(
                                 id='dropdown-produto',
                                 options=dropdown_options,
                                 placeholder="Selecione uma opção",
+                                value=selected_itemsGeral,
                                 multi=True,
                                 style={'width': '100%'}
                             ),
@@ -254,35 +260,41 @@ def criar_threads_produto():
 
 #------------------------------------------------------ Criação de Produto ----------------------------------------------------------------#
 @callback(
+    Output('dropdown-values', 'data'),
     Input('botao-criar', 'n_clicks'), 
-    State('dropdown-produto', 'value'),  # Captura o valor atual do input1
+    State('dropdown-produto', 'value'),
 )
 def adicionar_grafico(n_clicks, selected_items):
     global selected_itemsGeral
     if selected_items is None or len(selected_items) == 0:
-        selected_itemsGeral = selected_items
         print("Nada selecionado")
-        return
+        return []
     else:
         selected_itemsGeral = selected_items
         print(f"Opções selecionadas: {selected_items}")
-        return 
-    
-
-        criar_produto(nome_produto)
-        criar_threads_produto()
+        return selected_itemsGeral
+        
+@callback(
+    Output('dropdown-produto', 'value'),
+    [Input('dropdown-values', 'data')], 
+)
+def adicionar_grafico(dropdown_values):
+    return dropdown_values
 
 #------------------------------------------------------ Criação Gráficos ----------------------------------------------------------------#
 @callback(
     Output('graphs-container', 'children'),
     # [Input('data-store', 'data')]
-    [Input('interval-start', 'n_intervals')]  # Dispara na primeira vez
+    [Input('interval-start', 'n_intervals')], # Dispara na primeira vez
+    [State('dropdown-values', 'data')]
 )
-def update_layout(n):
+def update_layout(n, dropdown_values):
     graphs = []
-    produtos = obterProdutos()
+    # produtos = obterProdutos()
+    produtos = dropdown_values
+    if not(produtos): produtos = []
 
-    for i, produto in enumerate(produtos['nome_produto']):
+    for i in produtos:
         # Adiciona um título e um gráfico para cada produto
         graph_div = html.Div([
             dcc.Graph(id={'type': 'product-figures', 'index': i})
@@ -297,9 +309,10 @@ def update_layout(n):
 @callback(
     # [Output(f'graph-{i}', 'figure') for i in range(len(produtos))],
     Output({"type": "product-figures", "index": ALL}, "figure"),
-    [Input('interval-component', 'n_intervals')]
+    [Input('interval-component', 'n_intervals')],
+    [State('dropdown-values', 'data')]
 )
-def update_graphs(n):
+def update_graphs(n, dropdown_values):
     
     global df
     dff = df
@@ -310,14 +323,16 @@ def update_graphs(n):
     
     global produtos
     
-    for indice, linha in produtos.iterrows():
+    teste = produtos[produtos['id_produto'].isin(dropdown_values)]
+    
+    for indice, linha in teste.iterrows():
         id = linha.id_produto
         name = linha.nome_produto
         graficos.append(GraficoProduto(go.Figure(data=go.Scatter(x=dff['data'].loc[dff['id_produto'] == id], y=dff['quant'].loc[dff['id_produto'] == id], mode="lines")),id,name))
     
     for fig in graficos:
-            # fig.grafico.update_layout(uirevision='some-constant', showlegend=False, xaxis_autorange=True, yaxis_autorange=True, autosize=True, title=fig.name)
-            fig.grafico.update_layout(showlegend=False, xaxis_autorange=True, yaxis_autorange=True, autosize=True, title=fig.name)
+            fig.grafico.update_layout(uirevision='some-constant', showlegend=False, xaxis_autorange=True, yaxis_autorange=True, autosize=True, title=fig.name)
+            # fig.grafico.update_layout(showlegend=False, xaxis_autorange=True, yaxis_autorange=True, autosize=True, title=fig.name)
     
     return [graficos[i].grafico for i in range(len(graficos))]
 

@@ -23,7 +23,7 @@ def obterProdutos():
 
 def obterVendas():
     engine = sqlalchemy.create_engine('mysql+pymysql://root:root@localhost:3306/supermercado')
-    query = "SELECT id_produto, SUM(quantidade_comprada) AS quant_total FROM consumo_produtos GROUP BY id_produto ORDER BY id_produto ASC"
+    query = "SELECT A.ID AS id_produto, IFNULL(SUM(B.quantidade_comprada), 0) AS quant_total FROM produtos AS A LEFT JOIN consumo_produtos AS B ON A.ID = B.id_produto GROUP BY A.ID ORDER BY A.ID ASC;"
     df_bar = pd.read_sql(query, con = engine)
     return df_bar
 

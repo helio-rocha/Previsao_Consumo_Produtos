@@ -238,20 +238,31 @@ def display_page(pathname):
     
 # ------------------------------------------------------ Dialog ----------------------------------------------------------------#
 # Callback para abrir/fechar o modal
-@app.callback(
+@callback(
     Output("modal", "is_open"),
     [Input("botao-add-produtos", "n_clicks"), Input("botao-criar", "n_clicks")],
     [dash.dependencies.State("modal", "is_open")],
 )
 def toggle_modal(n1, n2, is_open):
-    if n1:
-        return True
-    if n2:
-        return False
+    # Lógica para verificar qual botão foi pressionado
+    ctx = dash.callback_context
+    
+    if not ctx.triggered:
+        return is_open  # Se nenhum botão foi pressionado, manter o estado atual
+    
+    # Verifica qual botão foi pressionado
+    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+
+    if button_id == "botao-add-produtos" and not is_open:
+        return True  # Abrir o modal se não estiver aberto
+    elif button_id == "botao-criar" and is_open:
+        return False  # Fechar o modal se estiver aberto
+    
+    return is_open  # Retorna o estado atual se nenhuma condição foi satisfeita
     
 # ------------------------------------------------------ Gráfico de barras ----------------------------------------------------------------#
 
-@app.callback(
+@callback(
     Output('bar-graph', 'figure'),
     [Input('interval-component', 'n_intervals')]
 )
@@ -298,7 +309,8 @@ def criar_threads_produto():
 #------------------------------------------------------ Criação de Produto ----------------------------------------------------------------#
 @callback(
     Output('dropdown-values', 'data'),
-    Input('botao-criar', 'n_clicks'), 
+    # Input('botao-criar', 'n_clicks'), 
+    Input("modal", "is_open"),
     State('dropdown-produto', 'value'),
 )
 def adicionar_grafico(n_clicks, selected_items):
@@ -320,26 +332,26 @@ def adicionar_grafico(dropdown_values):
 @callback(
     Output('graphs-container', 'children'),
     # [Input('data-store', 'data')]
-    [Input('botao-home', 'n_clicks'), Input('botao-criar', 'n_clicks')], # Dispara na primeira vez
-    [State('dropdown-values', 'data')]
+    Input('dropdown-produto', 'value'),
+    # [Input('botao-home', 'n_clicks'), Input('botao-criar', 'n_clicks')], # Dispara na primeira vez
+    [State('dropdown-values', 'data')],
 )
-def update_layout(n1, n2, dropdown_values):
-    if n1 or n2:
-        graphs = []
-        # produtos = obterProdutos()
-        print(dropdown_values)
-        produtos = dropdown_values
-        if not(produtos): produtos = []
+def update_layout(n, dropdown_values):
+    graphs = []
+    # produtos = obterProdutos()
+    print(dropdown_values)
+    produtos = dropdown_values
+    if not(produtos): produtos = []
 
-        for i in produtos:
-            # Adiciona um título e um gráfico para cada produto
-            graph_div = html.Div([
-                dcc.Graph(id={'type': 'product-figures', 'index': i})
-            ], style={'width': '48%', 'display': 'inline-block', 'margin': '1%'})  # Controla o tamanho de cada gráfico e espaço
+    for i in produtos:
+        # Adiciona um título e um gráfico para cada produto
+        graph_div = html.Div([
+            dcc.Graph(id={'type': 'product-figures', 'index': i})
+        ], style={'width': '48%', 'display': 'inline-block', 'margin': '1%'})  # Controla o tamanho de cada gráfico e espaço
 
-            graphs.append(graph_div)
+        graphs.append(graph_div)
 
-        return graphs
+    return graphs
 
 #------------------------------------------------------ Atualização Gráficos ----------------------------------------------------------------#
 # Callback para atualizar cada gráfico com base nos produtos

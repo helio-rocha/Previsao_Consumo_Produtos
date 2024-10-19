@@ -205,7 +205,7 @@ def display_page(pathname):
                             dcc.Graph(
                                 id='bar-graph',
                             ),
-                            html.P("Ranking", style={'textAlign':'center'}),
+                            # html.P("Ranking", style={'textAlign':'center'}),
                             html.Div(id='dynamic-content', style={'textAlign':'center'})
                             ]),
         return layout
@@ -264,13 +264,19 @@ def toggle_modal(n1, n2, is_open):
 
 @callback(
     Output('bar-graph', 'figure'),
-    [Input('interval-component', 'n_intervals')]
+    Output('bar-graph', 'style'),
+    [Input('interval-component', 'n_intervals')],
+    [State('dropdown-values', 'data')],
 )
-def update_bar_chart(n_intervals):
+def update_bar_chart(n_intervals, dropdown_values):
     # Filtro baseado nos itens selecionados (supondo que você faça uma consulta no BD ou tenha uma lógica para isso)
     # Atualize os dados com base nos itens selecionados.
+    if dropdown_values is None or dropdown_values == []:
+        return go.Figure(), {'display': 'none'}
+    df_bar_teste = df_bar[df_bar['id_produto'].isin(dropdown_values)]
+    teste = produtos[produtos['id_produto'].isin(dropdown_values)]
     
-    df_merged = pd.merge(df_bar, produtos, on='id_produto')
+    df_merged = pd.merge(df_bar_teste, teste, on='id_produto')
     df_merged['nome_produto']
     
     # Exemplo de gráfico de barras dinâmico
@@ -284,7 +290,7 @@ def update_bar_chart(n_intervals):
     
     fig.update_layout(showlegend=False)
     
-    return fig
+    return fig, {'display': 'block'}
 
 # --------------------------------------------------------------------------------------------------------------------------------------------#
 def criar_threads_produto():
@@ -387,18 +393,23 @@ def update_graphs(n, dropdown_values):
 
 @callback(
     Output('dynamic-content', 'children'),
-    [Input('interval-component', 'n_intervals')]
+    [Input('interval-component', 'n_intervals')],
+    [State('dropdown-values', 'data')]
 )
-def update_graph(n):
+def update_graph(n, dropdown_values):
     
-    ranking = ranquamento(df)
+    if dropdown_values == None or dropdown_values == []:
+        return None
+    ranking = ranquamento(df, dropdown_values)
 
     # Retorna os gráficos individualmente para cada Output
-    return [html.P(teste) for teste in ranking]
+    return [html.P("Ranking", style={'textAlign':'center'})] + [html.P(teste) for teste in ranking]
 
-def ranquamento(df):
-    ranking = df.groupby('id_produto').last().reset_index().sort_values(by='quant', ascending=True)['id_produto']#.astype(str).tolist()
-    df_merged = pd.merge(ranking, produtos, on='id_produto')
+def ranquamento(df, dropdown_values):
+    teste = df[df['id_produto'].isin(dropdown_values)]
+    produtos_teste = produtos[produtos['id_produto'].isin(dropdown_values)]
+    ranking = teste.groupby('id_produto').last().reset_index().sort_values(by='quant', ascending=True)['id_produto']#.astype(str).tolist()
+    df_merged = pd.merge(ranking, produtos_teste, on='id_produto')
     return df_merged['nome_produto']
 
 if __name__ == "__main__":

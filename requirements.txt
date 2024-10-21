@@ -4,3 +4,4 @@ pandas
 SQLAlchemy
 mysql-connector-python
 pymysql
+dash-bootstrap-components

@@ -168,6 +168,7 @@ def display_page(pathname):
     if pathname == '/home' or pathname == '/':
         global selected_itemsGeral
         dropdown_options = get_options_from_db()
+        dropdown_options.insert(0, {'label': 'Selecionar Todos', 'value': 'ALL'})
         layout = html.Div([html.H1(children='Monitoramento de estoque', style={'textAlign':'center'}),
                             # dcc.Store(id='data-store'),
                             dcc.Interval(id='interval-start', interval=1, n_intervals=0, max_intervals=1),  # Executa apenas uma vez no início
@@ -285,10 +286,9 @@ def update_bar_chart(n_intervals, dropdown_values):
         y='quant_total',  # Eixo Y (atualizado dinamicamente)
         labels={"nome_produto": "Produto", "quant_total": "Quantidade"},
         color='nome_produto',
-        title="Vendas de produtos",
     )
     
-    fig.update_layout(showlegend=False)
+    fig.update_layout(showlegend=False, title={'text': "Vendas de produtos", 'x': 0.5, 'xanchor': 'center'} )
     
     return fig, {'display': 'block'}
 
@@ -323,6 +323,9 @@ def adicionar_grafico(n_clicks, selected_items):
     global selected_itemsGeral
     if selected_items is None or len(selected_items) == 0:
         return []
+    if selected_items and 'ALL' in selected_items:
+        selected_itemsGeral = [opt['value'] for opt in get_options_from_db() if opt['value'] != 'ALL']
+        return selected_itemsGeral
     else:
         selected_itemsGeral = selected_items
         return selected_itemsGeral
@@ -384,7 +387,7 @@ def update_graphs(n, dropdown_values):
         graficos.append(GraficoProduto(go.Figure(data=go.Scatter(x=dff['data'].loc[dff['id_produto'] == id], y=dff['quant'].loc[dff['id_produto'] == id], mode="lines")),id,name))
     
     for fig in graficos:
-            fig.grafico.update_layout(uirevision='some-constant', showlegend=False, xaxis_autorange=True, yaxis_autorange=True, autosize=True, title=fig.name)
+            fig.grafico.update_layout(uirevision='some-constant', showlegend=False, xaxis_autorange=True, yaxis_autorange=True, autosize=True, title={'text': fig.name, 'x': 0.5, 'xanchor': 'center'} )
             # fig.grafico.update_layout(showlegend=False, xaxis_autorange=True, yaxis_autorange=True, autosize=True, title=fig.name)
     
     return [graficos[i].grafico for i in range(len(graficos))]

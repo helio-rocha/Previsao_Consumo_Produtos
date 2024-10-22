@@ -1,23 +1,17 @@
 from queue import Queue
-from threading import Thread, Event, Lock
-import threading
+from threading import Thread
 import random
 import numpy as np
 import time
-from dash import Dash, html, dcc, callback, Output, Input, State, ALL, Patch
+from dash import Dash, html, dcc, callback, Output, Input, State, ALL
 import dash_bootstrap_components as dbc
 import plotly.express as px
 import pandas as pd
 from datetime import datetime
-import mysql.connector
-import sqlalchemy
-from plotly.subplots import make_subplots
 import plotly.graph_objs as go
 from grafico_produto import GraficoProduto
 import dash
-from database import select, obterProdutos, obterVendas, saveDB, get_options_from_db, criar_produto
-
-lock = Lock()
+from database import select, obterProdutos, obterVendas, saveDB, get_options_from_db
 
 df = pd.DataFrame(columns=['quant', 'data', 'id_produto'])
 df = select()
@@ -30,7 +24,7 @@ df_bar = obterVendas()
 
 selected_itemsGeral = []
 
-def comprarProduto(queue, id_produto):
+def comprarProduto(queue):
     while True:
         tempo = geracaoTempo()
         quant = geracaoQuant()
@@ -62,21 +56,20 @@ def generate_random_numbers(queue, quant_estoque, id_produto):
     global df
     quant_total = df_bar.loc[df_bar['id_produto'] == id_produto, 'quant_total']
     while quant_estoque > 0:
-        # with lock:
-            data = queue.get()
-            quant = data['quant']
-            date = data['data']
-            quant_estoque = quant_estoque - quant
-            quant_total = quant_total + quant
-            if quant_estoque < 0:
-                quant = quant + quant_estoque
-                quant_estoque = 0
-            new_row = {'quant': quant_estoque, 'data': date, 'id_produto': id_produto}
-            df.loc[len(df)] = new_row
-            df_bar.loc[df_bar['id_produto'] == id_produto, 'quant_total'] = quant_total
-            saveDB(quant, date, quant_estoque, id_produto)
-            if quant_estoque == 0:
-                quant_estoque = 200
+        data = queue.get()
+        quant = data['quant']
+        date = data['data']
+        quant_estoque = quant_estoque - quant
+        quant_total = quant_total + quant
+        if quant_estoque < 0:
+            quant = quant + quant_estoque
+            quant_estoque = 0
+        new_row = {'quant': quant_estoque, 'data': date, 'id_produto': id_produto}
+        df.loc[len(df)] = new_row
+        df_bar.loc[df_bar['id_produto'] == id_produto, 'quant_total'] = quant_total
+        saveDB(quant, date, quant_estoque, id_produto)
+        if quant_estoque == 0:
+            quant_estoque = 200
 
 app = Dash(suppress_callback_exceptions=True, external_stylesheets=["https://fonts.googleapis.com/icon?family=Material+Icons", 'https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css', dbc.themes.BOOTSTRAP])
 
@@ -85,10 +78,10 @@ default_layout = html.Div([
         dcc.Location(id='url2', refresh=False),
         dcc.Store(id='dropdown-values'),
         html.Div([
-                html.Button(html.Span("home", className="material-icons"), id='botao-home',),  # O botão que desencadeará o evento
-                html.Button(html.Span("add", className="material-icons"), id='botao-add-produtos'),  # O botão que desencadeará o evento
-                html.Button(html.Span("query_stats", className="material-icons"), id='botao-previsao'),  # O botão que desencadeará o evento
-                html.Button(html.Span("settings", className="material-icons"), id='botao-config'),  # O botão que desencadeará o evento
+                html.Button(html.Span("home", className="material-icons"), id='botao-home',),
+                html.Button(html.Span("add", className="material-icons"), id='botao-add-produtos'),
+                html.Button(html.Span("query_stats", className="material-icons"), id='botao-previsao'),
+                html.Button(html.Span("settings", className="material-icons"), id='botao-config'),
         ], style={'display': 'flex', 'align-items': 'center', 'justify-content': 'center', 'width': '100%', 'padding-top': '20px'}),
         html.Div(id='page-content')
     ])
@@ -109,50 +102,26 @@ def main():
         thread[i].start()
 
     app.layout = default_layout
-    
-    # app.index_string = '''
-    # <!DOCTYPE html>
-    # <html>
-    #     <head>
-    #         <meta charset="utf-8">
-    #         <title>Dash App with Google Icons</title>
-    #         <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    #         <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    #     </head>
-    #     <body>
-    #         {%app_entry%}
-    #         <footer>
-    #             {%config%}
-    #             {%scripts%}
-    #             {%renderer%}
-    #         </footer>
-    #     </body>
-    # </html>
-    # '''
         
     app.run(debug=True, use_reloader=False)
     
 @callback(
-    Output('url', 'pathname'),  # O output vai alte rar o pathname da URL
+    Output('url', 'pathname'),
     [Input('botao-home', 'n_clicks'),
-    #  Input('botao-add-produtos', 'n_clicks'),
      Input('botao-previsao', 'n_clicks'),
      Input('botao-config', 'n_clicks'),
      ],
-    Input('url', 'pathname'),  # O input que captura o pathname atual
+    Input('url', 'pathname'),
 )
 def redirecionar_page(n1, n3, n4, pathname):
     ctx = dash.callback_context
     if not ctx.triggered:
         return dash.no_update
 
-    # Identifica qual botão foi clicado
     button_id = ctx.triggered[0]['prop_id'].split('.')[0]
 
     if button_id == 'botao-home' and n1:
         return '/home'
-    # elif button_id == 'botao-add-produtos' and n2:
-    #     return '/add_produto'
     elif button_id == 'botao-previsao' and n3:
         return '/previsao'
     elif button_id == 'botao-config' and n4:
@@ -170,11 +139,10 @@ def display_page(pathname):
         dropdown_options = get_options_from_db()
         dropdown_options.insert(0, {'label': 'Selecionar Todos', 'value': 'ALL'})
         layout = html.Div([html.H1(children='Monitoramento de estoque', style={'textAlign':'center'}),
-                            # dcc.Store(id='data-store'),
-                            dcc.Interval(id='interval-start', interval=1, n_intervals=0, max_intervals=1),  # Executa apenas uma vez no início
+                            dcc.Interval(id='interval-start', interval=1, n_intervals=0, max_intervals=1),
                             dbc.Modal(
                                 [
-                                    dcc.Interval(id='interval-dropdown', interval=1, n_intervals=0, max_intervals=1),  # Executa apenas uma vez no início
+                                    dcc.Interval(id='interval-dropdown', interval=1, n_intervals=0, max_intervals=1),
                                     dbc.ModalHeader(dbc.ModalTitle("Adicionar produtos")),
                                     dbc.ModalBody(dcc.Dropdown(
                                                 id='dropdown-produto',
@@ -186,16 +154,16 @@ def display_page(pathname):
                                             ),),
                                     dbc.ModalFooter(
                                             html.Div([
-                                            html.Button('Adicionar', id='botao-criar', style={'width': '150px', 'height': '50px', 'font-size': '25px'}),  # O botão que desencadeará o evento
+                                            html.Button('Adicionar', id='botao-criar', style={'width': '150px', 'height': '50px', 'font-size': '25px'}),
                                         ], style={'display': 'flex', 'align-items': 'center', 'justify-content': 'center', 'width': '100%', 'padding-top': '20px'}),
                                     ),
                                 ],
                                 id="modal",
                                 is_open=False,
-                                size="lg",  # Definido para grande, pode ser "sm", "lg" ou "xl"
-                                backdrop=True,  # Permite fechar ao clicar fora do modal
-                                keyboard=True,  # Permite fechar ao pressionar "ESC"
-                                centered=True,  # Centralizado na tela
+                                size="lg",
+                                backdrop=True,
+                                keyboard=True,
+                                centered=True,
                             ),
                             html.Div(id='graphs-container', style={'display': 'flex', 'flex-wrap': 'wrap'}),
                             dcc.Interval(
@@ -206,28 +174,9 @@ def display_page(pathname):
                             dcc.Graph(
                                 id='bar-graph',
                             ),
-                            # html.P("Ranking", style={'textAlign':'center'}),
                             html.Div(id='dynamic-content', style={'textAlign':'center'})
                             ]),
         return layout
-    # elif pathname == '/add_produto':
-    #     global selected_itemsGeral
-    #     dropdown_options = get_options_from_db()
-    #     layout2 = html.Div([html.H1(children='Adicionar produtos', style={'textAlign':'center'}),
-    #                         dcc.Interval(id='interval-dropdown', interval=1, n_intervals=0, max_intervals=1),  # Executa apenas uma vez no início
-    #                         dcc.Dropdown(
-    #                             id='dropdown-produto',
-    #                             options=dropdown_options,
-    #                             placeholder="Selecione uma opção",
-    #                             value=selected_itemsGeral,
-    #                             multi=True,
-    #                             style={'width': '100%'}
-    #                         ),
-    #                         html.Div([
-    #                             html.Button('Adicionar', id='botao-criar', style={'width': '150px', 'height': '50px', 'font-size': '25px'}),  # O botão que desencadeará o evento
-    #                         ], style={'display': 'flex', 'align-items': 'center', 'justify-content': 'center', 'width': '100%', 'padding-top': '20px'}),
-    #                         ]),
-    #     return layout2
     elif pathname == '/previsao':
         layout2 = html.Div([html.H1(children='Previsão', style={'textAlign':'center'})]),
         return layout2
@@ -238,28 +187,25 @@ def display_page(pathname):
         return html.Div('Página Inexistente')
     
 # ------------------------------------------------------ Dialog ----------------------------------------------------------------#
-# Callback para abrir/fechar o modal
 @callback(
     Output("modal", "is_open"),
     [Input("botao-add-produtos", "n_clicks"), Input("botao-criar", "n_clicks")],
     [dash.dependencies.State("modal", "is_open")],
 )
 def toggle_modal(n1, n2, is_open):
-    # Lógica para verificar qual botão foi pressionado
     ctx = dash.callback_context
     
     if not ctx.triggered:
-        return is_open  # Se nenhum botão foi pressionado, manter o estado atual
+        return is_open
     
-    # Verifica qual botão foi pressionado
     button_id = ctx.triggered[0]['prop_id'].split('.')[0]
 
     if button_id == "botao-add-produtos" and not is_open:
-        return True  # Abrir o modal se não estiver aberto
+        return True
     elif button_id == "botao-criar" and is_open:
-        return False  # Fechar o modal se estiver aberto
+        return False
     
-    return is_open  # Retorna o estado atual se nenhuma condição foi satisfeita
+    return is_open
     
 # ------------------------------------------------------ Gráfico de barras ----------------------------------------------------------------#
 
@@ -270,8 +216,6 @@ def toggle_modal(n1, n2, is_open):
     [State('dropdown-values', 'data')],
 )
 def update_bar_chart(n_intervals, dropdown_values):
-    # Filtro baseado nos itens selecionados (supondo que você faça uma consulta no BD ou tenha uma lógica para isso)
-    # Atualize os dados com base nos itens selecionados.
     if dropdown_values is None or dropdown_values == []:
         return go.Figure(), {'display': 'none'}
     df_bar_teste = df_bar[df_bar['id_produto'].isin(dropdown_values)]
@@ -280,10 +224,9 @@ def update_bar_chart(n_intervals, dropdown_values):
     df_merged = pd.merge(df_bar_teste, teste, on='id_produto')
     df_merged['nome_produto']
     
-    # Exemplo de gráfico de barras dinâmico
     fig = px.bar(df_merged,
-        x='nome_produto',  # Eixo X (atualizado dinamicamente)
-        y='quant_total',  # Eixo Y (atualizado dinamicamente)
+        x='nome_produto',
+        y='quant_total',
         labels={"nome_produto": "Produto", "quant_total": "Quantidade"},
         color='nome_produto',
     )
@@ -315,7 +258,6 @@ def criar_threads_produto():
 #------------------------------------------------------ Criação de Produto ----------------------------------------------------------------#
 @callback(
     Output('dropdown-values', 'data'),
-    # Input('botao-criar', 'n_clicks'), 
     Input("modal", "is_open"),
     State('dropdown-produto', 'value'),
 )
@@ -340,32 +282,25 @@ def adicionar_grafico(dropdown_values):
 #------------------------------------------------------ Criação Gráficos ----------------------------------------------------------------#
 @callback(
     Output('graphs-container', 'children'),
-    # [Input('data-store', 'data')]
     Input('dropdown-produto', 'value'),
-    # [Input('botao-home', 'n_clicks'), Input('botao-criar', 'n_clicks')], # Dispara na primeira vez
     [State('dropdown-values', 'data')],
 )
 def update_layout(n, dropdown_values):
     graphs = []
-    # produtos = obterProdutos()
-    print(dropdown_values)
     produtos = dropdown_values
     if not(produtos): produtos = []
 
     for i in produtos:
-        # Adiciona um título e um gráfico para cada produto
         graph_div = html.Div([
             dcc.Graph(id={'type': 'product-figures', 'index': i})
-        ], style={'width': '48%', 'display': 'inline-block', 'margin': '1%'})  # Controla o tamanho de cada gráfico e espaço
+        ], style={'width': '48%', 'display': 'inline-block', 'margin': '1%'})
 
         graphs.append(graph_div)
 
     return graphs
 
 #------------------------------------------------------ Atualização Gráficos ----------------------------------------------------------------#
-# Callback para atualizar cada gráfico com base nos produtos
 @callback(
-    # [Output(f'graph-{i}', 'figure') for i in range(len(produtos))],
     Output({"type": "product-figures", "index": ALL}, "figure"),
     [Input('interval-component', 'n_intervals')],
     [State('dropdown-values', 'data')]
@@ -388,7 +323,6 @@ def update_graphs(n, dropdown_values):
     
     for fig in graficos:
             fig.grafico.update_layout(uirevision='some-constant', showlegend=False, xaxis_autorange=True, yaxis_autorange=True, autosize=True, title={'text': fig.name, 'x': 0.5, 'xanchor': 'center'} )
-            # fig.grafico.update_layout(showlegend=False, xaxis_autorange=True, yaxis_autorange=True, autosize=True, title=fig.name)
     
     return [graficos[i].grafico for i in range(len(graficos))]
 
@@ -405,13 +339,12 @@ def update_graph(n, dropdown_values):
         return None
     ranking = ranquamento(df, dropdown_values)
 
-    # Retorna os gráficos individualmente para cada Output
     return [html.P("Ranking", style={'textAlign':'center'})] + [html.P(teste) for teste in ranking]
 
 def ranquamento(df, dropdown_values):
     teste = df[df['id_produto'].isin(dropdown_values)]
     produtos_teste = produtos[produtos['id_produto'].isin(dropdown_values)]
-    ranking = teste.groupby('id_produto').last().reset_index().sort_values(by='quant', ascending=True)['id_produto']#.astype(str).tolist()
+    ranking = teste.groupby('id_produto').last().reset_index().sort_values(by='quant', ascending=True)['id_produto']
     df_merged = pd.merge(ranking, produtos_teste, on='id_produto')
     return df_merged['nome_produto']
 

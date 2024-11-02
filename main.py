@@ -7,7 +7,7 @@ from dash import Dash, html, dcc, callback, Output, Input, State, ALL
 import dash_bootstrap_components as dbc
 import plotly.express as px
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import plotly.graph_objs as go
 from grafico_produto import GraficoProduto
 import dash
@@ -24,12 +24,14 @@ df_bar = obterVendas()
 
 selected_itemsGeral = []
 
-def comprarProduto(queue):
+quant_padrao = 1000
+
+def comprarProduto(queue, id, data_atual):
     while True:
         tempo = geracaoTempo()
         quant = geracaoQuant()
-        time.sleep(tempo)
-        date = gerarData()
+        time.sleep(0.1)
+        data_atual, date = gerarData(data_atual, tempo)
         data = {"quant": quant, "data": date}
         queue.put(data)
 
@@ -37,13 +39,29 @@ def obterEstoqueAtual():
     try:
         quant_estoque = [df['quant'].iloc[-1] for i in range(len(produtos))]
     except:
-        quant_estoque = [200 for i in range(len(produtos))]
+        quant_estoque = [quant_padrao for i in range(len(produtos))]
     return quant_estoque
 
-def gerarData():
-    date = datetime.now()
-    dt_string = date.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-    return dt_string
+def obterData():
+    try:
+        data = [df['data'].iloc[-1] for i in range(len(produtos))]
+    except:
+        data = [datetime.now() for i in range(len(produtos))]
+    return data
+
+def gerarData(data_atual, tempo):
+    tempo = converteFloatMinuto(tempo)
+    data_atual = data_atual + tempo
+    dt_string = data_atual.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    return data_atual, dt_string
+
+def converteFloatMinuto(tempo):
+    minutos = int(tempo)
+    segundos = int((tempo - minutos) * 60)
+
+    return timedelta(minutes=minutos, seconds=segundos)
+
+# data_atual = obterData()
 
 def geracaoTempo():
     return random.expovariate(1)
@@ -69,7 +87,7 @@ def generate_random_numbers(queue, quant_estoque, id_produto):
         df_bar.loc[df_bar['id_produto'] == id_produto, 'quant_total'] = quant_total
         saveDB(quant, date, quant_estoque, id_produto)
         if quant_estoque == 0:
-            quant_estoque = 200
+            quant_estoque = quant_padrao
 
 app = Dash(suppress_callback_exceptions=True, external_stylesheets=["https://fonts.googleapis.com/icon?family=Material+Icons", 'https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css', dbc.themes.BOOTSTRAP])
 
@@ -88,6 +106,7 @@ default_layout = html.Div([
 
 def main(): 
     quant_estoque = obterEstoqueAtual()
+    data_atual = obterData()
     
     # Fila
     queue = [Queue() for i in range(len(produtos))]
@@ -95,7 +114,7 @@ def main():
     thread = ["" for i in range(len(produtos))]
     
     for i in range(len(produtos)):
-        produto[i] = Thread(target=comprarProduto, args=(queue[i], produtos["id_produto"].loc[i], ))
+        produto[i] = Thread(target=comprarProduto, args=(queue[i], produtos["id_produto"].loc[i], data_atual[i] ))
         produto[i].start()
         
         thread[i] = Thread(target=generate_random_numbers, args=(queue[i], quant_estoque[i], produtos["id_produto"].loc[i] ))

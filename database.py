@@ -27,7 +27,15 @@ def obterVendas():
     df_bar = pd.read_sql(query, con = engine)
     return df_bar
 
+def historico(id_produto):
+    # connection = mysql.connector.connect(host=host, user=user, password=password, database=database)
+    engine = sqlalchemy.create_engine('mysql+pymysql://root:root@localhost:3306/supermercado')
+    query = f"SELECT horario AS data, quantidade_estoque AS quant, id_produto FROM consumo_produtos WHERE id_produto = {id_produto} ORDER BY ID ASC"
+    df = pd.read_sql(query, con = engine)
+    return df
+
 def saveDB(quant, date, quant_estoque, id_produto):
+    if quant_estoque == 0: quant_estoque = 1
     try:
         connection = mysql.connector.connect(host=host, user=user, password=password, database=database)
         # print("Conectado ao banco de dados MySQL!")

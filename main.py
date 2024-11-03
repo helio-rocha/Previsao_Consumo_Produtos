@@ -1,5 +1,5 @@
 from queue import Queue
-from threading import Thread
+from threading import Thread, Lock
 import random
 import numpy as np
 import time
@@ -11,7 +11,12 @@ from datetime import datetime, timedelta
 import plotly.graph_objs as go
 from grafico_produto import GraficoProduto
 import dash
-from database import select, obterProdutos, obterVendas, saveDB, get_options_from_db
+from database import select, obterProdutos, obterVendas, saveDB, get_options_from_db, historico
+from datetime import timedelta
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from pmdarima.arima import auto_arima
+
+lock = Lock()
 
 df = pd.DataFrame(columns=['quant', 'data', 'id_produto'])
 df = select()
@@ -37,16 +42,22 @@ def comprarProduto(queue, id, data_atual):
 
 def obterEstoqueAtual():
     try:
-        quant_estoque = [df['quant'].iloc[-1] for i in range(len(produtos))]
+        ultimo_registro = df.groupby('id_produto')['quant'].last().reset_index()
+        quant_estoque_dict = ultimo_registro.set_index('id_produto')['quant'].to_dict()
+        quant_estoque = [quant_estoque_dict.get(produto_id, quant_padrao) for produto_id in produtos['id_produto']]
     except:
         quant_estoque = [quant_padrao for i in range(len(produtos))]
     return quant_estoque
 
 def obterData():
     try:
-        data = [df['data'].iloc[-1] for i in range(len(produtos))]
+        ultimo_registro = df.groupby('id_produto')['data'].last().reset_index()
+        data_dict = ultimo_registro.set_index('id_produto')['data'].to_dict()
+        data = [data_dict.get(produto_id, datetime.now()) for produto_id in produtos['id_produto']]
     except:
         data = [datetime.now() for i in range(len(produtos))]
+        print(data)
+    print(data)
     return data
 
 def gerarData(data_atual, tempo):
@@ -67,7 +78,8 @@ def geracaoTempo():
     return random.expovariate(1)
     
 def geracaoQuant():
-    quant = random.randint(1, 5)
+    # quant = random.randint(1, 5)
+    quant = np.random.poisson(6)
     return quant
 
 def generate_random_numbers(queue, quant_estoque, id_produto):
@@ -83,7 +95,8 @@ def generate_random_numbers(queue, quant_estoque, id_produto):
             quant = quant + quant_estoque
             quant_estoque = 0
         new_row = {'quant': quant_estoque, 'data': date, 'id_produto': id_produto}
-        df.loc[len(df)] = new_row
+        with lock:
+            df.loc[len(df)] = new_row
         df_bar.loc[df_bar['id_produto'] == id_produto, 'quant_total'] = quant_total
         saveDB(quant, date, quant_estoque, id_produto)
         if quant_estoque == 0:
@@ -197,13 +210,149 @@ def display_page(pathname):
                             ]),
         return layout
     elif pathname == '/previsao':
-        layout2 = html.Div([html.H1(children='Previsão', style={'textAlign':'center'})]),
+        # global selected_itemsGeral
+        dropdown_options = get_options_from_db()
+        layout2 = html.Div([html.H1(children='Previsão', style={'textAlign':'center'}),
+                            dcc.Dropdown(
+                                id='dropdown-produto-prever',
+                                options=dropdown_options,
+                                placeholder="Selecione uma opção",
+                                value=selected_itemsGeral,
+                                multi=False,
+                                style={'width': '100%'}
+                            ),
+                            dcc.Input(id='input-intervalo',type='text', value=''),
+                            html.Button('Adicionar', id='botao-prever', style={'width': '150px', 'height': '50px', 'font-size': '25px'}),
+                            html.Div(id='graphs-container-previsao', style={'display': 'flex', 'flex-wrap': 'wrap'}),
+                            ]),
         return layout2
     elif pathname == '/config':
         layout2 = html.Div([html.H1(children='Config', style={'textAlign':'center'}),]),
         return layout2
     else:
         return html.Div('Página Inexistente')
+    
+def adjust_forecast_index(df_forecast, n_steps, df_real):
+    last_date = df_real.index[-1]
+    forecast_dates = pd.date_range(start=last_date, periods=n_steps, freq='min')
+    df_forecast.index = forecast_dates
+    return df_forecast
+    
+def forecast_holt(df_holt, n_steps):
+    model = ExponentialSmoothing(endog=df_holt, trend='add').fit()
+    # model = ExponentialSmoothing(endog=df_holt, trend='mul', seasonal='add', seasonal_periods=12).fit()
+    # model = SimpleExpSmoothing(df_holt).fit()
+
+    forecasting_hw = model.forecast(steps = n_steps)
+    
+    forecasting_hw = adjust_forecast_index(forecasting_hw, n_steps, df_holt)
+    
+    return forecasting_hw
+    
+def forecast_arima(df_arima, n_steps):
+    model = auto_arima(y=df_arima, m=12)
+
+    forecasting_arima = pd.Series(model.predict(n_periods=n_steps))
+
+    forecasting_arima = adjust_forecast_index(forecasting_arima, n_steps, df_arima)
+    
+    return forecasting_arima
+
+def cortar_df(df_historico, intervalo):
+    data_final = df_historico.index[-1]
+    data_inicial = data_final - timedelta(minutes=3*intervalo)
+    data_inicial = pd.to_datetime(data_inicial)
+    
+    df_cortado = df_historico[df_historico.index >= data_inicial]
+    
+    return df_cortado
+
+def obter_df_historico(id_produto):
+    df_historico = historico(id_produto)
+    
+    df_historico["data"] = pd.to_datetime(df_historico["data"])
+
+    df_historico = pd.Series(df_historico["quant"].values, index=df_historico["data"])
+    
+    return df_historico
+
+#------------------------------------------------------ Botão previsão ----------------------------------------------------------------#
+@callback(
+    Output('graphs-container-previsao', 'children'),
+    Input('botao-prever', 'n_clicks'), 
+    State('input-intervalo', 'value'),  # Captura o valor atual do input1
+    State('dropdown-produto-prever', 'value')   # Captura o valor atual do input2
+)
+def criar_forecast_graph(n_clicks, intervalo, id_produto):
+    if not(id_produto): return
+    
+    n_steps = int(intervalo)
+    
+    df_historico = obter_df_historico(id_produto)
+    
+    df_cortado = cortar_df(df_historico, int(intervalo))
+    
+    df_arima = forecast_arima(df_historico, n_steps)
+    
+    df_holt = forecast_holt(df_historico, n_steps)
+    
+    graph_div_holt = html.Div([
+        dcc.Graph(id={'type': 'product-figures', 'index': 1},figure={
+            'data': [
+                go.Scatter(
+                    x=df_cortado.index,
+                    y=df_cortado,
+                    mode='lines',
+                    name='Dados reais',
+                    line=dict(color='blue')  # Cor para a série prevista
+                ),
+                go.Scatter(
+                    x=df_holt.index,
+                    y=df_holt,
+                    mode='lines',
+                    name='Dados previstos',
+                    line=dict(color='red')  # Cor para a série prevista
+                )
+            ],
+            'layout': go.Layout(
+                title='Previsão utilizando Holt Winters',
+                xaxis={'title': 'Data'},
+                yaxis={'title': 'Quantidade de produtos no estoque'}
+            )
+        })
+    ], style={'width': '48%', 'display': 'inline-block', 'margin': '1%'})
+    
+    graph_div_arima = html.Div([
+        dcc.Graph(id={'type': 'product-figures', 'index': 1},figure={
+            'data': [
+                go.Scatter(
+                    x=df_cortado.index,
+                    y=df_cortado,
+                    mode='lines',
+                    name='Dados reais',
+                    line=dict(color='blue')  # Cor para a série prevista
+                ),
+                go.Scatter(
+                    x=df_arima.index,
+                    y=df_arima,
+                    mode='lines',
+                    name='Dados previstos',
+                    line=dict(color='red')  # Cor para a série prevista
+                )
+            ],
+            'layout': go.Layout(
+                title='Previsão utilizando ARIMA',
+                xaxis={'title': 'Data'},
+                yaxis={'title': 'Quantidade de produtos no estoque'}
+            )
+        })
+    ], style={'width': '48%', 'display': 'inline-block', 'margin': '1%'})
+    
+    graph_div = [graph_div_holt, graph_div_arima]
+
+    return graph_div
+
+
     
 # ------------------------------------------------------ Dialog ----------------------------------------------------------------#
 @callback(
@@ -352,8 +501,8 @@ def update_graphs(n, dropdown_values):
     [Input('interval-component', 'n_intervals')],
     [State('dropdown-values', 'data')]
 )
-def update_graph(n, dropdown_values):
-    
+def getRanking(n, dropdown_values):
+    global df
     if dropdown_values == None or dropdown_values == []:
         return None
     ranking = ranquamento(df, dropdown_values)

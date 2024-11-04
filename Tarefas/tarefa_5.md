@@ -1,5 +1,5 @@
 1.PROJETO PRÁTICO
-- Aumentar a fonte do nome do produto, valores nos eixos x e y de todos os gráficos para ficar mais claro as informações contidas neles;
+- Ok - Aumentar a fonte do nome do produto, valores nos eixos x e y de todos os gráficos para ficar mais claro as informações contidas neles;
 - OK? - Trabalharmos na funcionalidade de previsão (terceiro ícone do menu). O objetivo é que, ao clicar neste ícone, o usuário seja redirecionado para uma nova tela, que permitirá ele selecionar um produto específico e inserir um intervalor que gostaria de fazer a previsão. Feito isso e clicando em um botão, deverá aparecer dois gráficos de previsão de consumo: um previsto com Holt-Winters e outro com ARIMA;
 - No quarto ícone do menu (Configurações), pensei em adicionarmos as seguintes configurações: 1) permitir o usuário selecionar o intervalo de previsão padrão; 2) habilitar ou desabilitar o gráfico em barras da tela home; 3) habilitar ou desabilitar o gráfico de previsão padrão da tela home; 4) Definir a % de estoque mínimo;
 - Para armazenamento destas configurações feitas pelo usuário, sugiro criarmos mais uma tabela no BD chamada "configs". Sugiro também alterar o nome das tabelas já existentes no BD para "produto" e "consumo". É uma boa prática sempre usarmos nomes de tabelas no singular. Feito isso, atualizar a Figura do BD no artigo;

@@ -315,9 +315,9 @@ def criar_forecast_graph(n_clicks, intervalo, id_produto):
                 )
             ],
             'layout': go.Layout(
-                title='Previsão utilizando Holt Winters',
-                xaxis={'title': 'Data'},
-                yaxis={'title': 'Quantidade de produtos no estoque'}
+                title={'text': 'Previsão utilizando Holt Winters', 'font': {'size': 24}},
+                xaxis={'title': 'Data', 'titlefont': {'size': 18}},
+                yaxis={'title': 'Quantidade no estoque', 'titlefont': {'size': 18}}
             )
         })
     ], style={'width': '48%', 'display': 'inline-block', 'margin': '1%'})
@@ -341,9 +341,9 @@ def criar_forecast_graph(n_clicks, intervalo, id_produto):
                 )
             ],
             'layout': go.Layout(
-                title='Previsão utilizando ARIMA',
-                xaxis={'title': 'Data'},
-                yaxis={'title': 'Quantidade de produtos no estoque'}
+                title={'text': 'Previsão utilizando ARIMA', 'font': {'size': 24}},
+                xaxis={'title': 'Data', 'titlefont': {'size': 18}},
+                yaxis={'title': 'Quantidade no estoque', 'titlefont': {'size': 18}}
             )
         })
     ], style={'width': '48%', 'display': 'inline-block', 'margin': '1%'})
@@ -399,7 +399,12 @@ def update_bar_chart(n_intervals, dropdown_values):
         color='nome_produto',
     )
     
-    fig.update_layout(showlegend=False, title={'text': "Vendas de produtos", 'x': 0.5, 'xanchor': 'center'} )
+    fig.update_layout(
+        showlegend=False, 
+        title={'text': "Vendas de produtos", 'x': 0.5, 'xanchor': 'center', 'font': {'size': 24}},
+        xaxis={'title': '','tickfont': {'size': 18}},
+        yaxis={'title': 'Quantidade vendida', 'titlefont': {'size': 18}} 
+        )
     
     return fig, {'display': 'block'}
 
@@ -490,7 +495,16 @@ def update_graphs(n, dropdown_values):
         graficos.append(GraficoProduto(go.Figure(data=go.Scatter(x=dff['data'].loc[dff['id_produto'] == id], y=dff['quant'].loc[dff['id_produto'] == id], mode="lines")),id,name))
     
     for fig in graficos:
-            fig.grafico.update_layout(uirevision='some-constant', showlegend=False, xaxis_autorange=True, yaxis_autorange=True, autosize=True, title={'text': fig.name, 'x': 0.5, 'xanchor': 'center'} )
+            fig.grafico.update_layout(
+                uirevision='some-constant', 
+                showlegend=False, 
+                xaxis_autorange=True, 
+                yaxis_autorange=True, 
+                autosize=True, 
+                title={'text': fig.name, 'x': 0.5, 'xanchor': 'center', 'font': {'size': 24}},
+                xaxis={'title': 'Data', 'titlefont': {'size': 18}},
+                yaxis={'title': 'Quantidade no estoque', 'titlefont': {'size': 18}} 
+            )
     
     return [graficos[i].grafico for i in range(len(graficos))]
 
@@ -510,7 +524,8 @@ def getRanking(n, dropdown_values):
     return [html.P("Ranking", style={'textAlign':'center'})] + [html.P(teste) for teste in ranking]
 
 def ranquamento(df, dropdown_values):
-    teste = df[df['id_produto'].isin(dropdown_values)]
+    prod = df['id_produto']
+    teste = df[prod.isin(dropdown_values)]
     produtos_teste = produtos[produtos['id_produto'].isin(dropdown_values)]
     ranking = teste.groupby('id_produto').last().reset_index().sort_values(by='quant', ascending=True)['id_produto']
     df_merged = pd.merge(ranking, produtos_teste, on='id_produto')

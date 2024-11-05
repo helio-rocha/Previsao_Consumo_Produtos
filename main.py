@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import plotly.graph_objs as go
 from grafico_produto import GraficoProduto
 import dash
-from database import select, obterProdutos, obterVendas, saveDB, get_options_from_db, historico
+from database import select, obterProdutos, obterVendas, saveDB, get_options_from_db, historico, obter_config, saveConfig
 from datetime import timedelta
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from pmdarima.arima import auto_arima
@@ -35,7 +35,7 @@ def comprarProduto(queue, id, data_atual):
     while True:
         tempo = geracaoTempo()
         quant = geracaoQuant()
-        time.sleep(0.1)
+        time.sleep(1)
         data_atual, date = gerarData(data_atual, tempo)
         data = {"quant": quant, "data": date}
         queue.put(data)
@@ -56,8 +56,6 @@ def obterData():
         data = [data_dict.get(produto_id, datetime.now()) for produto_id in produtos['id_produto']]
     except:
         data = [datetime.now() for i in range(len(produtos))]
-        print(data)
-    print(data)
     return data
 
 def gerarData(data_atual, tempo):
@@ -166,6 +164,7 @@ def redirecionar_page(n1, n3, n4, pathname):
 @callback(Output('page-content', 'children'),
             Input('url', 'pathname'))
 def display_page(pathname):
+    configs = obter_config()
     if pathname == '/home' or pathname == '/':
         global selected_itemsGeral
         dropdown_options = get_options_from_db()
@@ -203,10 +202,10 @@ def display_page(pathname):
                                 interval=500,
                                 n_intervals=0,
                             ),
-                            dcc.Graph(
+                            html.Div([dcc.Graph(
                                 id='bar-graph',
-                            ),
-                            html.Div(id='dynamic-content', style={'textAlign':'center'})
+                            )],id='bar_graph_div', style={'display': 'block' if configs['grafico_barras'][0] else 'none'}),
+                            html.Div(id='dynamic-content', style={'textAlign':'center', 'display': 'block' if configs['previsao_home'][0] else 'none'})
                             ]),
         return layout
     elif pathname == '/previsao':
@@ -221,13 +220,19 @@ def display_page(pathname):
                                 multi=False,
                                 style={'width': '100%'}
                             ),
-                            dcc.Input(id='input-intervalo',type='text', value=''),
+                            dcc.Input(id='input-intervalo',type='text', value=configs['intervalo_padrao'][0]),
                             html.Button('Adicionar', id='botao-prever', style={'width': '150px', 'height': '50px', 'font-size': '25px'}),
                             html.Div(id='graphs-container-previsao', style={'display': 'flex', 'flex-wrap': 'wrap'}),
                             ]),
         return layout2
     elif pathname == '/config':
-        layout2 = html.Div([html.H1(children='Config', style={'textAlign':'center'}),]),
+        layout2 = html.Div([html.H1(children='Config', style={'textAlign':'center'}),
+                            dcc.Input(id='input-intervalo_padrao',type='text', value=configs['intervalo_padrao'][0]),
+                            dbc.Switch(id='input-grafico_barras', label='Mostrar gráfico de barras', value=configs['grafico_barras'][0]),
+                            dbc.Switch(id='input-previsao_home', label='Mostrar previsão padrão', value=configs['previsao_home'][0]),
+                            dcc.Input(id='input-estoque_minimo',type='text', value=configs['estoque_minimo'][0]),
+                            html.Button('Salvar', id='botao-salvar_config', style={'width': '150px', 'height': '50px', 'font-size': '25px'}),
+                            ]),
         return layout2
     else:
         return html.Div('Página Inexistente')
@@ -275,6 +280,18 @@ def obter_df_historico(id_produto):
     df_historico = pd.Series(df_historico["quant"].values, index=df_historico["data"])
     
     return df_historico
+
+#------------------------------------------------------ Salvar configurações ----------------------------------------------------------------#
+@callback(
+    Input('botao-salvar_config', 'n_clicks'), 
+    State('input-intervalo_padrao', 'value'),
+    State('input-grafico_barras', 'value'),
+    State('input-previsao_home', 'value'),
+    State('input-estoque_minimo', 'value')
+)
+def criar_forecast_graph(n_clicks, intervalo_padrao, grafico_barras, previsao_home, estoque_minimo):
+    saveConfig(intervalo_padrao, grafico_barras, previsao_home, estoque_minimo)
+    return
 
 #------------------------------------------------------ Botão previsão ----------------------------------------------------------------#
 @callback(
@@ -351,8 +368,6 @@ def criar_forecast_graph(n_clicks, intervalo, id_produto):
     graph_div = [graph_div_holt, graph_div_arima]
 
     return graph_div
-
-
     
 # ------------------------------------------------------ Dialog ----------------------------------------------------------------#
 @callback(

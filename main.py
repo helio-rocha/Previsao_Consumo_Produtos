@@ -196,7 +196,7 @@ def display_page(pathname):
                                 keyboard=True,
                                 centered=True,
                             ),
-                            html.Div(id='graphs-container', style={'display': 'flex', 'flex-wrap': 'wrap'}),
+                            html.Div(id='graphs-container', style={'display': 'flex', 'flex-wrap': 'wrap'}, className="row"),
                             dcc.Interval(
                                 id='interval-component',
                                 interval=500,
@@ -205,33 +205,50 @@ def display_page(pathname):
                             html.Div([dcc.Graph(
                                 id='bar-graph',
                             )],id='bar_graph_div', style={'display': 'block' if configs['grafico_barras'][0] else 'none'}),
-                            html.Div(id='dynamic-content', style={'textAlign':'center', 'display': 'block' if configs['previsao_home'][0] else 'none'})
+                            html.Div(id='dynamic-content', style={'textAlign':'center', 'display': 'block' if configs['previsao_home'][0] else 'none'}),
+                            dcc.Interval(
+                                id='interval-previsao',
+                                interval=5000,
+                                n_intervals=0,
+                            ),
+                            dcc.Store(id='ranking-values'),
                             ]),
         return layout
     elif pathname == '/previsao':
         # global selected_itemsGeral
         dropdown_options = get_options_from_db()
         layout2 = html.Div([html.H1(children='Previsão', style={'textAlign':'center'}),
+                            html.Div([
+                            html.Div([html.P(children='Produto', style={'textAlign':'center'}),
                             dcc.Dropdown(
                                 id='dropdown-produto-prever',
                                 options=dropdown_options,
-                                placeholder="Selecione uma opção",
+                                placeholder="Selecione um produto",
                                 value=selected_itemsGeral,
                                 multi=False,
-                                style={'width': '100%'}
-                            ),
-                            dcc.Input(id='input-intervalo',type='text', value=configs['intervalo_padrao'][0]),
-                            html.Button('Adicionar', id='botao-prever', style={'width': '150px', 'height': '50px', 'font-size': '25px'}),
-                            html.Div(id='graphs-container-previsao', style={'display': 'flex', 'flex-wrap': 'wrap'}),
-                            ]),
+                                style={'width': '200px'}
+                            )],style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'marginBottom': '20px'}),
+                            html.Div([html.P(children='Intervalo de previsão (min)'),
+                            dcc.Input(id='input-intervalo',type='text', value=configs['intervalo_padrao'][0], placeholder="Insira o intervalo"),
+                                ],style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'marginBottom': '20px', 'text-align': 'center'}),
+                            html.Button('Prever', id='botao-prever', style={'width': '150px', 'height': '50px', 'font-size': '25px', 'alignSelf': 'center'}),
+                            ], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'justifyContent': 'center', 'margin-bottom': "25px"}),
+                            html.Div(id='graphs-container-previsao', style={'display': 'flex', 'flex-wrap': 'wrap'}, className="row"),
+                            ])
         return layout2
     elif pathname == '/config':
-        layout2 = html.Div([html.H1(children='Config', style={'textAlign':'center'}),
-                            dcc.Input(id='input-intervalo_padrao',type='text', value=configs['intervalo_padrao'][0]),
-                            dbc.Switch(id='input-grafico_barras', label='Mostrar gráfico de barras', value=configs['grafico_barras'][0]),
-                            dbc.Switch(id='input-previsao_home', label='Mostrar previsão padrão', value=configs['previsao_home'][0]),
-                            dcc.Input(id='input-estoque_minimo',type='text', value=configs['estoque_minimo'][0]),
-                            html.Button('Salvar', id='botao-salvar_config', style={'width': '150px', 'height': '50px', 'font-size': '25px'}),
+        layout2 = html.Div([html.H1(children='Configurações', style={'textAlign':'center'}),
+                            html.Div([
+                                html.P(children='Intervalo de previsão padrão (min)'
+                                       ,style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'marginBottom': '20px', 'text-align': 'center'}),
+                                dcc.Input(id='input-intervalo_padrao',type='text', value=configs['intervalo_padrao'][0]
+                                          ,style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'marginBottom': '20px', 'text-align': 'center'}),
+                                dbc.Switch(id='input-grafico_barras', label='Mostrar gráfico de barras', value=configs['grafico_barras'][0]),
+                                dbc.Switch(id='input-previsao_home', label='Mostrar previsão padrão', value=configs['previsao_home'][0]),
+                                html.P(children='Estoque mínimo (%)',style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'marginBottom': '20px', 'text-align': 'center'}),
+                                dcc.Input(id='input-estoque_minimo',type='text', value=configs['estoque_minimo'][0],style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'marginBottom': '20px', 'text-align': 'center'}),
+                                html.Button('Salvar', id='botao-salvar_config', style={'width': '150px', 'height': '50px', 'font-size': '25px'}),
+                            ], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'justifyContent': 'center', 'margin-bottom': "25px"}),
                             ]),
         return layout2
     else:
@@ -332,12 +349,22 @@ def criar_forecast_graph(n_clicks, intervalo, id_produto):
                 )
             ],
             'layout': go.Layout(
-                title={'text': 'Previsão utilizando Holt Winters', 'font': {'size': 24}},
+                title={'text': 'Previsão Holt Winters', 'font': {'size': 24}},
                 xaxis={'title': 'Data', 'titlefont': {'size': 18}},
-                yaxis={'title': 'Quantidade no estoque', 'titlefont': {'size': 18}}
+                yaxis={'title': 'Quantidade no estoque', 'titlefont': {'size': 18}},
+                legend=dict(
+                    orientation="h",
+                    x=0,  # Posição horizontal
+                    y=-0.4,    # Posição vertical (1 = topo)
+                    xanchor='left',  # Alinha o centro da legenda com o x=0.5
+                    yanchor='top'      # Alinha o topo da legenda com y=1
+                ),
+                margin=dict(
+                    l=40, r=40, t=40, b=80  # Ajusta a margem inferior para dar espaço à legenda
+                )
             )
         })
-    ], style={'width': '48%', 'display': 'inline-block', 'margin': '1%'})
+    ], className="col-12 col-md-6")
     
     graph_div_arima = html.Div([
         dcc.Graph(id={'type': 'product-figures', 'index': 1},figure={
@@ -358,12 +385,22 @@ def criar_forecast_graph(n_clicks, intervalo, id_produto):
                 )
             ],
             'layout': go.Layout(
-                title={'text': 'Previsão utilizando ARIMA', 'font': {'size': 24}},
+                title={'text': 'Previsão ARIMA', 'font': {'size': 24}},
                 xaxis={'title': 'Data', 'titlefont': {'size': 18}},
-                yaxis={'title': 'Quantidade no estoque', 'titlefont': {'size': 18}}
+                yaxis={'title': 'Quantidade no estoque', 'titlefont': {'size': 18}},
+                legend=dict(
+                    orientation="h",
+                    x=0,  # Posição horizontal
+                    y=-0.4,    # Posição vertical (1 = topo)
+                    xanchor='left',  # Alinha o centro da legenda com o x=0.5
+                    yanchor='top'      # Alinha o topo da legenda com y=1
+                ),
+                margin=dict(
+                    l=40, r=40, t=40, b=80  # Ajusta a margem inferior para dar espaço à legenda
+                )
             )
         })
-    ], style={'width': '48%', 'display': 'inline-block', 'margin': '1%'})
+    ], className="col-12 col-md-6")
     
     graph_div = [graph_div_holt, graph_div_arima]
 
@@ -480,8 +517,8 @@ def update_layout(n, dropdown_values):
 
     for i in produtos:
         graph_div = html.Div([
-            dcc.Graph(id={'type': 'product-figures', 'index': i})
-        ], style={'width': '48%', 'display': 'inline-block', 'margin': '1%'})
+            dcc.Graph(id={'type': 'product-figures', 'index': i},)
+        ], className="col-12 col-md-6")
 
         graphs.append(graph_div)
 
@@ -518,7 +555,11 @@ def update_graphs(n, dropdown_values):
                 autosize=True, 
                 title={'text': fig.name, 'x': 0.5, 'xanchor': 'center', 'font': {'size': 24}},
                 xaxis={'title': 'Data', 'titlefont': {'size': 18}},
-                yaxis={'title': 'Quantidade no estoque', 'titlefont': {'size': 18}} 
+                yaxis={'title': 'Quantidade no estoque', 'titlefont': {'size': 18}},
+                modebar= {
+                    "orientation": 'h',
+                },
+                margin=dict(l=20, r=20, t=40, b=40),  # Reduz as margens para aproveitar melhor o espaço
             )
     
     return [graficos[i].grafico for i in range(len(graficos))]
@@ -526,25 +567,58 @@ def update_graphs(n, dropdown_values):
 #------------------------------------------------------ Ranking ----------------------------------------------------------------#
 
 @callback(
-    Output('dynamic-content', 'children'),
-    [Input('interval-component', 'n_intervals')],
+    Output('ranking-values', 'data'), 
+    [Input('interval-previsao', 'n_intervals')],
     [State('dropdown-values', 'data')]
 )
 def getRanking(n, dropdown_values):
     global df
     if dropdown_values == None or dropdown_values == []:
         return None
-    ranking = ranquamento(df, dropdown_values)
+    store = {}
+    thread = Thread(target=ranquamento, args=(df, dropdown_values, store))
+    thread.start()
+    # ranking = ranquamento(df, dropdown_values)
+    
+    thread.join()
+    return store
 
-    return [html.P("Ranking", style={'textAlign':'center'})] + [html.P(teste) for teste in ranking]
-
-def ranquamento(df, dropdown_values):
+def ranquamento(df, dropdown_values, store):
     prod = df['id_produto']
     teste = df[prod.isin(dropdown_values)]
+    
+    configs = obter_config()
+    intervalo = configs['intervalo_padrao'][0]
+    
+    previsoes = pd.DataFrame(columns=['id_produto', 'quant'])
+    
     produtos_teste = produtos[produtos['id_produto'].isin(dropdown_values)]
-    ranking = teste.groupby('id_produto').last().reset_index().sort_values(by='quant', ascending=True)['id_produto']
+    
+    for id_produto in produtos_teste['id_produto']:
+        df_historico = obter_df_historico(id_produto)
+        
+        df_arima = forecast_arima(df_historico, int(intervalo))
+        
+        df_arima = df_arima[len(df_arima)-1]
+        
+        new_row = {'id_produto': id_produto, 'quant': df_arima}
+        previsoes.loc[len(previsoes)] = new_row
+    
+    print(previsoes)
+    
+    ranking = previsoes.groupby('id_produto').last().reset_index().sort_values(by='quant', ascending=True)['id_produto']
     df_merged = pd.merge(ranking, produtos_teste, on='id_produto')
-    return df_merged['nome_produto']
+    store['result'] = df_merged['nome_produto']
+    # return df_merged['nome_produto']
+
+@callback(
+    Output('dynamic-content', 'children'),
+    Input('ranking-values', 'data'), 
+)
+def adicionar_grafico(data):
+    if data:
+        ranking = data.get('result')
+        return [html.P("Ranking", style={'textAlign':'center'})] + [html.P(teste) for teste in ranking]
 
 if __name__ == "__main__":
     main()

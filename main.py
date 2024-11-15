@@ -21,7 +21,7 @@ lock = Lock()
 df = pd.DataFrame(columns=['quant', 'data', 'id_produto'])
 df = select()
 
-produtos = pd.DataFrame(columns=['id_produto', 'nome_produto'])
+produtos = pd.DataFrame(columns=['id_produto', 'nome_produto', 'quant_max_prateleira'])
 produtos = obterProdutos()
 
 df_bar = pd.DataFrame(columns=['id_produto', 'quant_total'])
@@ -31,11 +31,13 @@ selected_itemsGeral = []
 
 quant_padrao = 1000
 
+store = {"result": ""}
+
 def comprarProduto(queue, id, data_atual):
     while True:
         tempo = geracaoTempo()
         quant = geracaoQuant()
-        time.sleep(1)
+        time.sleep(0.01)
         data_atual, date = gerarData(data_atual, tempo)
         data = {"quant": quant, "data": date}
         queue.put(data)
@@ -44,9 +46,11 @@ def obterEstoqueAtual():
     try:
         ultimo_registro = df.groupby('id_produto')['quant'].last().reset_index()
         quant_estoque_dict = ultimo_registro.set_index('id_produto')['quant'].to_dict()
-        quant_estoque = [quant_estoque_dict.get(produto_id, quant_padrao) for produto_id in produtos['id_produto']]
+        # quant_estoque = [quant_estoque_dict.get(produto_id, quant_padrao) for produto_id in produtos['id_produto']]
+        quant_estoque = [quant_estoque_dict.get(produto['id_produto'], produto['quant_max_prateleira']) for _, produto in produtos.iterrows()]
     except:
-        quant_estoque = [quant_padrao for i in range(len(produtos))]
+        quant_estoque = [produto['quant_max_prateleira'] for produto in produtos]
+        # quant_estoque = [quant_padrao for i in range(len(produtos))]
     return quant_estoque
 
 def obterData():
@@ -73,7 +77,7 @@ def converteFloatMinuto(tempo):
 # data_atual = obterData()
 
 def geracaoTempo():
-    return random.expovariate(1)
+    return 5*random.expovariate(1)
     
 def geracaoQuant():
     # quant = random.randint(1, 5)
@@ -98,7 +102,7 @@ def generate_random_numbers(queue, quant_estoque, id_produto):
         df_bar.loc[df_bar['id_produto'] == id_produto, 'quant_total'] = quant_total
         saveDB(quant, date, quant_estoque, id_produto)
         if quant_estoque == 0:
-            quant_estoque = quant_padrao
+            quant_estoque = produtos.loc[produtos['id_produto'] == id_produto]['quant_max_prateleira'].values[0]
 
 app = Dash(suppress_callback_exceptions=True, external_stylesheets=["https://fonts.googleapis.com/icon?family=Material+Icons", 'https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css', dbc.themes.BOOTSTRAP])
 
@@ -169,7 +173,7 @@ def display_page(pathname):
         global selected_itemsGeral
         dropdown_options = get_options_from_db()
         dropdown_options.insert(0, {'label': 'Selecionar Todos', 'value': 'ALL'})
-        layout = html.Div([html.H1(children='Monitoramento de estoque', style={'textAlign':'center'}),
+        layout = html.Div([html.H1(children='Monitoramento de Consumo', style={'textAlign':'center'}),
                             dcc.Interval(id='interval-start', interval=1, n_intervals=0, max_intervals=1),
                             dbc.Modal(
                                 [
@@ -208,7 +212,12 @@ def display_page(pathname):
                             html.Div(id='dynamic-content', style={'textAlign':'center', 'display': 'block' if configs['previsao_home'][0] else 'none'}),
                             dcc.Interval(
                                 id='interval-previsao',
-                                interval=5000,
+                                interval=500,
+                                n_intervals=0,
+                            ),
+                            dcc.Interval(
+                                id='interval-check',
+                                interval=500,
                                 n_intervals=0,
                             ),
                             dcc.Store(id='ranking-values'),
@@ -262,8 +271,6 @@ def adjust_forecast_index(df_forecast, n_steps, df_real):
     
 def forecast_holt(df_holt, n_steps):
     model = ExponentialSmoothing(endog=df_holt, trend='add').fit()
-    # model = ExponentialSmoothing(endog=df_holt, trend='mul', seasonal='add', seasonal_periods=12).fit()
-    # model = SimpleExpSmoothing(df_holt).fit()
 
     forecasting_hw = model.forecast(steps = n_steps)
     
@@ -282,7 +289,7 @@ def forecast_arima(df_arima, n_steps):
 
 def cortar_df(df_historico, intervalo):
     data_final = df_historico.index[-1]
-    data_inicial = data_final - timedelta(minutes=3*intervalo)
+    data_inicial = data_final - timedelta(minutes=1.5*intervalo)
     data_inicial = pd.to_datetime(data_inicial)
     
     df_cortado = df_historico[df_historico.index >= data_inicial]
@@ -295,6 +302,8 @@ def obter_df_historico(id_produto):
     df_historico["data"] = pd.to_datetime(df_historico["data"])
 
     df_historico = pd.Series(df_historico["quant"].values, index=df_historico["data"])
+    
+    df_historico = df_historico.tail(100)
     
     return df_historico
 
@@ -350,18 +359,21 @@ def criar_forecast_graph(n_clicks, intervalo, id_produto):
             ],
             'layout': go.Layout(
                 title={'text': 'Previsão Holt Winters', 'font': {'size': 24}},
-                xaxis={'title': 'Data', 'titlefont': {'size': 18}},
-                yaxis={'title': 'Quantidade no estoque', 'titlefont': {'size': 18}},
+                xaxis={'title': 'Tempo', 'titlefont': {'size': 18}},
+                yaxis={'title': 'Quantidade de Produtos nas Prateleiras', 'titlefont': {'size': 18}},  # Define a distância do título do eixo X},
                 legend=dict(
                     orientation="h",
                     x=0,  # Posição horizontal
-                    y=-0.4,    # Posição vertical (1 = topo)
+                    y=-0.25,    # Posição vertical (1 = topo)
                     xanchor='left',  # Alinha o centro da legenda com o x=0.5
                     yanchor='top'      # Alinha o topo da legenda com y=1
                 ),
                 margin=dict(
-                    l=40, r=40, t=40, b=80  # Ajusta a margem inferior para dar espaço à legenda
-                )
+                    l=60, r=20, t=40, b=40  # Ajusta a margem inferior para dar espaço à legenda
+                ),
+                modebar= {
+                    "orientation": 'v',
+                },
             )
         })
     ], className="col-12 col-md-6")
@@ -386,17 +398,17 @@ def criar_forecast_graph(n_clicks, intervalo, id_produto):
             ],
             'layout': go.Layout(
                 title={'text': 'Previsão ARIMA', 'font': {'size': 24}},
-                xaxis={'title': 'Data', 'titlefont': {'size': 18}},
-                yaxis={'title': 'Quantidade no estoque', 'titlefont': {'size': 18}},
+                xaxis={'title': 'Tempo', 'titlefont': {'size': 18}},
+                yaxis={'title': 'Quantidade de Produtos nas Prateleiras', 'titlefont': {'size': 18}},
                 legend=dict(
                     orientation="h",
                     x=0,  # Posição horizontal
-                    y=-0.4,    # Posição vertical (1 = topo)
+                    y=-0.25,    # Posição vertical (1 = topo)
                     xanchor='left',  # Alinha o centro da legenda com o x=0.5
                     yanchor='top'      # Alinha o topo da legenda com y=1
                 ),
                 margin=dict(
-                    l=40, r=40, t=40, b=80  # Ajusta a margem inferior para dar espaço à legenda
+                    l=60, r=20, t=40, b=40  # Ajusta a margem inferior para dar espaço à legenda
                 )
             )
         })
@@ -454,8 +466,12 @@ def update_bar_chart(n_intervals, dropdown_values):
     fig.update_layout(
         showlegend=False, 
         title={'text': "Vendas de produtos", 'x': 0.5, 'xanchor': 'center', 'font': {'size': 24}},
-        xaxis={'title': '','tickfont': {'size': 18}},
-        yaxis={'title': 'Quantidade vendida', 'titlefont': {'size': 18}} 
+        xaxis={'title': 'Produto','tickfont': {'size': 18}, 'titlefont': {'size': 18}},
+        yaxis={'title': 'Quantidade vendida', 'titlefont': {'size': 18}},
+        modebar= {
+            "orientation": 'v',
+        },
+        uirevision='some-constant', 
         )
     
     return fig, {'display': 'block'}
@@ -553,13 +569,13 @@ def update_graphs(n, dropdown_values):
                 xaxis_autorange=True, 
                 yaxis_autorange=True, 
                 autosize=True, 
-                title={'text': fig.name, 'x': 0.5, 'xanchor': 'center', 'font': {'size': 24}},
-                xaxis={'title': 'Data', 'titlefont': {'size': 18}},
-                yaxis={'title': 'Quantidade no estoque', 'titlefont': {'size': 18}},
+                title={'text': 'Monitoramento de consumo de ' + fig.name, 'x': 0.5, 'xanchor': 'center', 'font': {'size': 22}},
+                xaxis={'title': 'Tempo', 'titlefont': {'size': 18}},
+                yaxis={'title': 'Quantidade de Produtos nas Prateleiras', 'titlefont': {'size': 18}},
                 modebar= {
-                    "orientation": 'h',
+                    "orientation": 'v',
                 },
-                margin=dict(l=20, r=20, t=40, b=40),  # Reduz as margens para aproveitar melhor o espaço
+                margin=dict(l=20, r=20, t=40, b=40),
             )
     
     return [graficos[i].grafico for i in range(len(graficos))]
@@ -567,7 +583,7 @@ def update_graphs(n, dropdown_values):
 #------------------------------------------------------ Ranking ----------------------------------------------------------------#
 
 @callback(
-    Output('ranking-values', 'data'), 
+    # Output('ranking-values', 'data'), 
     [Input('interval-previsao', 'n_intervals')],
     [State('dropdown-values', 'data')]
 )
@@ -575,20 +591,36 @@ def getRanking(n, dropdown_values):
     global df
     if dropdown_values == None or dropdown_values == []:
         return None
-    store = {}
-    thread = Thread(target=ranquamento, args=(df, dropdown_values, store))
+    thread = Thread(target=ranquamento, args=(df, dropdown_values))
     thread.start()
     # ranking = ranquamento(df, dropdown_values)
     
-    thread.join()
-    return store
+    # thread.join()
+    
+    # print("store")
+    # print(store)
+    # return store
 
-def ranquamento(df, dropdown_values, store):
+
+@callback(
+    Output('ranking-values', 'data'), 
+    [Input('interval-check', 'n_intervals')],
+)
+def getRanking(n):
+    global store
+    if store:
+        return store
+    else:
+        return False
+
+def ranquamento(df, dropdown_values):
+    global store
     prod = df['id_produto']
     teste = df[prod.isin(dropdown_values)]
     
     configs = obter_config()
     intervalo = configs['intervalo_padrao'][0]
+    estoque_minimo = configs['estoque_minimo'][0]
     
     previsoes = pd.DataFrame(columns=['id_produto', 'quant'])
     
@@ -599,12 +631,15 @@ def ranquamento(df, dropdown_values, store):
         
         df_arima = forecast_arima(df_historico, int(intervalo))
         
-        df_arima = df_arima[len(df_arima)-1]
+        df_arima = df_arima.iloc[len(df_arima)-1]
         
-        new_row = {'id_produto': id_produto, 'quant': df_arima}
-        previsoes.loc[len(previsoes)] = new_row
+        percentage = (100*df_arima)/produtos.loc[produtos['id_produto'] == id_produto]['quant_max_prateleira'].values[0]
+        
+        if percentage < estoque_minimo:
+            new_row = {'id_produto': id_produto, 'quant': percentage}
+            previsoes.loc[len(previsoes)] = new_row
     
-    print(previsoes)
+    # print(previsoes)
     
     ranking = previsoes.groupby('id_produto').last().reset_index().sort_values(by='quant', ascending=True)['id_produto']
     df_merged = pd.merge(ranking, produtos_teste, on='id_produto')
@@ -613,12 +648,16 @@ def ranquamento(df, dropdown_values, store):
 
 @callback(
     Output('dynamic-content', 'children'),
-    Input('ranking-values', 'data'), 
+    Input('ranking-values', 'data'),
+    State('dynamic-content', 'children'),
 )
-def adicionar_grafico(data):
-    if data:
+def adicionar_grafico(data, antigo):
+    if data['result']:
+        print("Ranking")
+        print(data)
         ranking = data.get('result')
         return [html.P("Ranking", style={'textAlign':'center'})] + [html.P(teste) for teste in ranking]
+    return antigo
 
 if __name__ == "__main__":
     main()

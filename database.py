@@ -24,7 +24,7 @@ def obter_config():
 
 def obterProdutos():
     engine = sqlalchemy.create_engine('mysql+pymysql://root:root@localhost:3306/supermercado')
-    query = "SELECT ID AS id_produto, nome_produto FROM produto ORDER BY ID ASC"
+    query = "SELECT ID AS id_produto, nome_produto, quant_max_prateleira FROM produto ORDER BY ID ASC"
     df = pd.read_sql(query, con = engine)
     return df
 

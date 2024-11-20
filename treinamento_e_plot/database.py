@@ -46,7 +46,25 @@ def historico_estoque(id_produto):
 
 def historico_personalizado(id_produto):
     engine = sqlalchemy.create_engine('mysql+pymysql://root:root@localhost:3306/supermercado')
-    query = f"SELECT horario AS data, quantidade_estoque AS quant, id_produto FROM consumo WHERE id_produto = {id_produto} AND ID > 53526 ORDER BY ID ASC LIMIT 990"
+    query = f""" SELECT 
+            data,
+            quant,
+            id_produto
+        FROM (
+            SELECT 
+                horario AS data, 
+                quantidade_estoque AS quant, 
+                id_produto,
+                ROW_NUMBER() OVER (PARTITION BY id_produto ORDER BY horario DESC) AS row_num
+            FROM 
+                consumo
+            WHERE id_produto = {id_produto}
+        ) subquery
+        WHERE 
+            row_num <= 1000
+        ORDER BY 
+            id_produto ASC, data ASC"""
+    # query = f"SELECT horario AS data, quantidade_estoque AS quant, id_produto FROM consumo WHERE id_produto = {id_produto} AND ID > 53526 ORDER BY ID ASC LIMIT 990"
     # query = f"SELECT horario AS data, quantidade_estoque AS quant, id_produto FROM consumo WHERE id_produto = {id_produto} AND ID BETWEEN 68757 AND 69257 ORDER BY ID ASC"
     # query = f"SELECT horario AS data, quantidade_estoque AS quant, id_produto FROM consumo WHERE id_produto = {id_produto} AND ID BETWEEN 69553 AND 69586 ORDER BY ID ASC"
     df = pd.read_sql(query, con = engine)

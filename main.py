@@ -35,7 +35,7 @@ def comprarProduto(queue, id, data_atual):
     while True:
         tempo = geracaoTempo()
         quant = geracaoQuant()
-        time.sleep(1)
+        time.sleep(0.5)
         data_atual, date = gerarData(data_atual, tempo)
         data = {"quant": quant, "data": date}
         queue.put(data)
@@ -260,7 +260,7 @@ def adjust_forecast_index(df_forecast, n_steps, df_real):
     df_forecast.index = forecast_dates
     return df_forecast
     
-def forecast_holt(df_holt, n_steps, periods=2):
+def forecast_holt(df_holt, n_steps, periods=40):
     # model = ExponentialSmoothing(endog=df_holt, trend='add').fit(optimized=True)
     model = ExponentialSmoothing(endog=df_holt, trend='add', seasonal='add', seasonal_periods=periods).fit(optimized=True)
 
@@ -378,7 +378,7 @@ def criar_forecast_graph(n_clicks, intervalo, id_produto):
     
     df_arima = forecast_arima(df_historico, n_steps, 5)
     
-    df_holt = forecast_holt(df_historico, n_steps, 80)
+    df_holt = forecast_holt(df_historico, n_steps, 77)
     
     graph_div_holt = create_forecast_graph(df_cortado, df_holt, "Previsão com Holt Winter")
     
@@ -617,7 +617,7 @@ def adicionar_grafico(data, antigo, dropdown_values):
     produtos_selecionados = produtos[produtos['id_produto'].isin(dropdown_values)]
     if data['result'] and (not produtos_selecionados.empty):
         ranking = data.get('result')
-        return [html.P("Ranking", style={'textAlign':'center'})] + [html.P(produto) for produto in ranking]
+        return [html.P("Previsão Padrão de Reabastecimento", style={'textAlign':'center'})] + [html.P(produto) for produto in ranking]
     return [html.P("", style={'textAlign':'center'})]
 
 if __name__ == "__main__":

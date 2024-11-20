@@ -587,6 +587,7 @@ def ranquamento(df, dropdown_values):
     previsoes = pd.DataFrame(columns=['id_produto', 'quant'])
     
     produtos_selecionados = produtos[produtos['id_produto'].isin(dropdown_values)]
+    # print(produtos_selecionados)
     
     for id_produto in produtos_selecionados['id_produto']:
         df_historico = obter_df_historico(id_produto)
@@ -610,12 +611,14 @@ def ranquamento(df, dropdown_values):
     Output('dynamic-content', 'children'),
     Input('ranking-values', 'data'),
     State('dynamic-content', 'children'),
+    [State('dropdown-values', 'data')]
 )
-def adicionar_grafico(data, antigo):
-    if data['result']:
+def adicionar_grafico(data, antigo, dropdown_values):
+    produtos_selecionados = produtos[produtos['id_produto'].isin(dropdown_values)]
+    if data['result'] and (not produtos_selecionados.empty):
         ranking = data.get('result')
         return [html.P("Ranking", style={'textAlign':'center'})] + [html.P(produto) for produto in ranking]
-    return [html.P("Ranking", style={'textAlign':'center'})]
+    return [html.P("", style={'textAlign':'center'})]
 
 if __name__ == "__main__":
     main()

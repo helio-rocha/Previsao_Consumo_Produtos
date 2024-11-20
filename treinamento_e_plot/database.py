@@ -34,19 +34,25 @@ def obterVendas():
 
 def historico(id_produto):
     engine = sqlalchemy.create_engine('mysql+pymysql://root:root@localhost:3306/supermercado')
-    # query = f"SELECT horario AS data, quantidade_estoque AS quant, id_produto FROM consumo WHERE id_produto = {id_produto} ORDER BY ID ASC"
-    query = f"SELECT horario AS data, quantidade_estoque AS quant, id_produto FROM consumo WHERE id_produto = {id_produto} AND ID >= (SELECT MIN(LIMITE.ID) FROM (SELECT ID FROM consumo WHERE id_produto = {id_produto} AND quantidade_estoque = 1 ORDER BY ID DESC LIMIT 5) AS LIMITE) ORDER BY ID ASC"
+    query = f"SELECT horario AS data, quantidade_comprada AS quant, id_produto FROM consumo WHERE id_produto = {id_produto} ORDER BY ID ASC"
     df = pd.read_sql(query, con = engine)
     return df
 
 def historico_estoque(id_produto):
     engine = sqlalchemy.create_engine('mysql+pymysql://root:root@localhost:3306/supermercado')
-    query = f"SELECT horario AS data, quantidade_comprada AS quant, id_produto FROM consumo WHERE id_produto = {id_produto} ORDER BY ID ASC"
+    query = f"SELECT horario AS data, quantidade_estoque AS quant, id_produto FROM consumo WHERE id_produto = {id_produto} ORDER BY ID ASC"
+    df = pd.read_sql(query, con = engine)
+    return df
+
+def historico_personalizado(id_produto):
+    engine = sqlalchemy.create_engine('mysql+pymysql://root:root@localhost:3306/supermercado')
+    query = f"SELECT horario AS data, quantidade_estoque AS quant, id_produto FROM consumo WHERE id_produto = {id_produto} AND ID BETWEEN 68757 AND 69257 ORDER BY ID ASC"
+    # query = f"SELECT horario AS data, quantidade_estoque AS quant, id_produto FROM consumo WHERE id_produto = {id_produto} AND ID BETWEEN 69553 AND 69586 ORDER BY ID ASC"
     df = pd.read_sql(query, con = engine)
     return df
 
 def saveDB(quant, date, quant_estoque, id_produto):
-    # if quant_estoque == 0: quant_estoque = 1
+    if quant_estoque == 0: quant_estoque = 1
     try:
         connection = mysql.connector.connect(host=host, user=user, password=password, database=database)
         

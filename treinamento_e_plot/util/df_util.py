@@ -25,10 +25,10 @@ def split_test(df, index):
     
     return train, test
 
-def plot(graph1, graph2):
+def plot(graph1, graph2=pd.DataFrame()):
     plt.figure(figsize=(12, 6))
     plt.plot(graph1, label="Real")
-    plt.plot(graph2, label="Previsão", color="orange")
+    if not graph2.empty: plt.plot(graph2, label="Previsão", color="orange")
     plt.title("Previsão usando Holt-Winters")
     plt.legend()
     plt.show()

@@ -204,7 +204,7 @@ def display_page(pathname):
                             html.Div(id='dynamic-content', style={'textAlign':'center', 'display': 'block' if configs['previsao_home'][0] else 'none'}),
                             dcc.Interval(
                                 id='interval-previsao',
-                                interval=100000,
+                                interval=5000,
                                 n_intervals=0,
                             ),
                             dcc.Interval(
@@ -260,8 +260,9 @@ def adjust_forecast_index(df_forecast, n_steps, df_real):
     df_forecast.index = forecast_dates
     return df_forecast
     
-def forecast_holt(df_holt, n_steps):
-    model = ExponentialSmoothing(endog=df_holt, trend='add').fit(optimized=True)
+def forecast_holt(df_holt, n_steps, periods=2):
+    # model = ExponentialSmoothing(endog=df_holt, trend='add').fit(optimized=True)
+    model = ExponentialSmoothing(endog=df_holt, trend='add', seasonal='add', seasonal_periods=periods).fit(optimized=True)
 
     forecasting_hw = model.forecast(steps = n_steps)
     
@@ -269,8 +270,8 @@ def forecast_holt(df_holt, n_steps):
     
     return forecasting_hw
     
-def forecast_arima(df_arima, n_steps):
-    model = auto_arima(y=df_arima, m=1)
+def forecast_arima(df_arima, n_steps, periods=1):
+    model = auto_arima(y=df_arima, m=periods)
 
     forecasting_arima = pd.Series(model.predict(n_periods=n_steps))
 
@@ -301,7 +302,7 @@ def obter_df_historico(id_produto):
 def ajustar_df(df_historico):
     df_ajustado = df_historico[~df_historico.index.duplicated(keep='last')]
 
-    df_ajustado = df_ajustado.resample('min')
+    df_ajustado = df_ajustado.resample('5min')
     df_ajustado = df_ajustado.ffill().bfill()
     df_ajustado = df_ajustado.interpolate(method='linear')
     
@@ -375,9 +376,9 @@ def criar_forecast_graph(n_clicks, intervalo, id_produto):
     
     df_cortado = cortar_df(df_historico, n_steps, 1.5)
     
-    df_arima = forecast_arima(df_historico, n_steps)
+    df_arima = forecast_arima(df_historico, n_steps, 5)
     
-    df_holt = forecast_holt(df_historico, n_steps)
+    df_holt = forecast_holt(df_historico, n_steps, 80)
     
     graph_div_holt = create_forecast_graph(df_cortado, df_holt, "Previsão com Holt Winter")
     
@@ -603,6 +604,7 @@ def ranquamento(df, dropdown_values):
     ranking = previsoes.groupby('id_produto').last().reset_index().sort_values(by='quant', ascending=True)['id_produto']
     df_merged = pd.merge(ranking, produtos_selecionados, on='id_produto')
     store['result'] = df_merged['nome_produto']
+    return
 
 @callback(
     Output('dynamic-content', 'children'),
@@ -611,11 +613,9 @@ def ranquamento(df, dropdown_values):
 )
 def adicionar_grafico(data, antigo):
     if data['result']:
-        print("Ranking")
-        print(data)
         ranking = data.get('result')
         return [html.P("Ranking", style={'textAlign':'center'})] + [html.P(produto) for produto in ranking]
-    return antigo
+    return [html.P("Ranking", style={'textAlign':'center'})]
 
 if __name__ == "__main__":
     main()

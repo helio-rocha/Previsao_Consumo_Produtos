@@ -29,15 +29,13 @@ df_bar = obterVendas()
 
 selected_itemsGeral = []
 
-quant_padrao = 1000
-
 store = {"result": ""}
 
 def comprarProduto(queue, id, data_atual):
     while True:
         tempo = geracaoTempo()
         quant = geracaoQuant()
-        time.sleep(0.01)
+        time.sleep(1)
         data_atual, date = gerarData(data_atual, tempo)
         data = {"quant": quant, "data": date}
         queue.put(data)
@@ -46,11 +44,9 @@ def obterEstoqueAtual():
     try:
         ultimo_registro = df.groupby('id_produto')['quant'].last().reset_index()
         quant_estoque_dict = ultimo_registro.set_index('id_produto')['quant'].to_dict()
-        # quant_estoque = [quant_estoque_dict.get(produto_id, quant_padrao) for produto_id in produtos['id_produto']]
         quant_estoque = [quant_estoque_dict.get(produto['id_produto'], produto['quant_max_prateleira']) for _, produto in produtos.iterrows()]
     except:
         quant_estoque = [produto['quant_max_prateleira'] for produto in produtos]
-        # quant_estoque = [quant_padrao for i in range(len(produtos))]
     return quant_estoque
 
 def obterData():
@@ -74,13 +70,10 @@ def converteFloatMinuto(tempo):
 
     return timedelta(minutes=minutos, seconds=segundos)
 
-# data_atual = obterData()
-
 def geracaoTempo():
     return 5*random.expovariate(1)
     
 def geracaoQuant():
-    # quant = random.randint(1, 5)
     quant = np.random.poisson(6)
     return quant
 
@@ -123,7 +116,6 @@ def main():
     quant_estoque = obterEstoqueAtual()
     data_atual = obterData()
     
-    # Fila
     queue = [Queue() for i in range(len(produtos))]
     produto = ["" for i in range(len(produtos))]
     thread = ["" for i in range(len(produtos))]
@@ -212,7 +204,7 @@ def display_page(pathname):
                             html.Div(id='dynamic-content', style={'textAlign':'center', 'display': 'block' if configs['previsao_home'][0] else 'none'}),
                             dcc.Interval(
                                 id='interval-previsao',
-                                interval=500,
+                                interval=100000,
                                 n_intervals=0,
                             ),
                             dcc.Interval(
@@ -224,7 +216,6 @@ def display_page(pathname):
                             ]),
         return layout
     elif pathname == '/previsao':
-        # global selected_itemsGeral
         dropdown_options = get_options_from_db()
         layout2 = html.Div([html.H1(children='Previsão', style={'textAlign':'center'}),
                             html.Div([
@@ -270,7 +261,7 @@ def adjust_forecast_index(df_forecast, n_steps, df_real):
     return df_forecast
     
 def forecast_holt(df_holt, n_steps):
-    model = ExponentialSmoothing(endog=df_holt, trend='add').fit()
+    model = ExponentialSmoothing(endog=df_holt, trend='add').fit(optimized=True)
 
     forecasting_hw = model.forecast(steps = n_steps)
     
@@ -279,7 +270,7 @@ def forecast_holt(df_holt, n_steps):
     return forecasting_hw
     
 def forecast_arima(df_arima, n_steps):
-    model = auto_arima(y=df_arima, m=12)
+    model = auto_arima(y=df_arima, m=1)
 
     forecasting_arima = pd.Series(model.predict(n_periods=n_steps))
 
@@ -287,9 +278,9 @@ def forecast_arima(df_arima, n_steps):
     
     return forecasting_arima
 
-def cortar_df(df_historico, intervalo):
+def cortar_df(df_historico, intervalo, mult):
     data_final = df_historico.index[-1]
-    data_inicial = data_final - timedelta(minutes=1.5*intervalo)
+    data_inicial = data_final - timedelta(minutes=mult*intervalo)
     data_inicial = pd.to_datetime(data_inicial)
     
     df_cortado = df_historico[df_historico.index >= data_inicial]
@@ -303,9 +294,58 @@ def obter_df_historico(id_produto):
 
     df_historico = pd.Series(df_historico["quant"].values, index=df_historico["data"])
     
-    df_historico = df_historico.tail(100)
+    df_historico = ajustar_df(df_historico)
     
     return df_historico
+
+def ajustar_df(df_historico):
+    df_ajustado = df_historico[~df_historico.index.duplicated(keep='last')]
+
+    df_ajustado = df_ajustado.resample('min')
+    df_ajustado = df_ajustado.ffill().bfill()
+    df_ajustado = df_ajustado.interpolate(method='linear')
+    
+    return df_ajustado
+
+def create_forecast_graph(df_real, df_previsto, title):
+    return html.Div([
+        dcc.Graph(id={'type': 'product-figures', 'index': 1},figure={
+            'data': [
+                go.Scatter(
+                    x=df_real.index,
+                    y=df_real,
+                    mode='lines',
+                    name='Dados reais',
+                    line=dict(color='blue')
+                ),
+                go.Scatter(
+                    x=df_previsto.index,
+                    y=df_previsto,
+                    mode='lines',
+                    name='Dados previstos',
+                    line=dict(color='red')
+                )
+            ],
+            'layout': go.Layout(
+                title={'text': title, 'font': {'size': 24}},
+                xaxis={'title': 'Tempo', 'titlefont': {'size': 18}},
+                yaxis={'title': 'Quantidade de Produtos nas Prateleiras', 'titlefont': {'size': 18}},
+                legend=dict(
+                    orientation="h",
+                    x=0,
+                    y=-0.25,
+                    xanchor='left',
+                    yanchor='top'
+                ),
+                margin=dict(
+                    l=60, r=20, t=40, b=40
+                ),
+                modebar= {
+                    "orientation": 'v',
+                },
+            )
+        })
+    ], className="col-12 col-md-6")
 
 #------------------------------------------------------ Salvar configurações ----------------------------------------------------------------#
 @callback(
@@ -323,8 +363,8 @@ def criar_forecast_graph(n_clicks, intervalo_padrao, grafico_barras, previsao_ho
 @callback(
     Output('graphs-container-previsao', 'children'),
     Input('botao-prever', 'n_clicks'), 
-    State('input-intervalo', 'value'),  # Captura o valor atual do input1
-    State('dropdown-produto-prever', 'value')   # Captura o valor atual do input2
+    State('input-intervalo', 'value'),
+    State('dropdown-produto-prever', 'value')
 )
 def criar_forecast_graph(n_clicks, intervalo, id_produto):
     if not(id_produto): return
@@ -333,86 +373,15 @@ def criar_forecast_graph(n_clicks, intervalo, id_produto):
     
     df_historico = obter_df_historico(id_produto)
     
-    df_cortado = cortar_df(df_historico, int(intervalo))
+    df_cortado = cortar_df(df_historico, n_steps, 1.5)
     
     df_arima = forecast_arima(df_historico, n_steps)
     
     df_holt = forecast_holt(df_historico, n_steps)
     
-    graph_div_holt = html.Div([
-        dcc.Graph(id={'type': 'product-figures', 'index': 1},figure={
-            'data': [
-                go.Scatter(
-                    x=df_cortado.index,
-                    y=df_cortado,
-                    mode='lines',
-                    name='Dados reais',
-                    line=dict(color='blue')  # Cor para a série prevista
-                ),
-                go.Scatter(
-                    x=df_holt.index,
-                    y=df_holt,
-                    mode='lines',
-                    name='Dados previstos',
-                    line=dict(color='red')  # Cor para a série prevista
-                )
-            ],
-            'layout': go.Layout(
-                title={'text': 'Previsão Holt Winters', 'font': {'size': 24}},
-                xaxis={'title': 'Tempo', 'titlefont': {'size': 18}},
-                yaxis={'title': 'Quantidade de Produtos nas Prateleiras', 'titlefont': {'size': 18}},  # Define a distância do título do eixo X},
-                legend=dict(
-                    orientation="h",
-                    x=0,  # Posição horizontal
-                    y=-0.25,    # Posição vertical (1 = topo)
-                    xanchor='left',  # Alinha o centro da legenda com o x=0.5
-                    yanchor='top'      # Alinha o topo da legenda com y=1
-                ),
-                margin=dict(
-                    l=60, r=20, t=40, b=40  # Ajusta a margem inferior para dar espaço à legenda
-                ),
-                modebar= {
-                    "orientation": 'v',
-                },
-            )
-        })
-    ], className="col-12 col-md-6")
+    graph_div_holt = create_forecast_graph(df_cortado, df_holt, "Previsão com Holt Winter")
     
-    graph_div_arima = html.Div([
-        dcc.Graph(id={'type': 'product-figures', 'index': 1},figure={
-            'data': [
-                go.Scatter(
-                    x=df_cortado.index,
-                    y=df_cortado,
-                    mode='lines',
-                    name='Dados reais',
-                    line=dict(color='blue')  # Cor para a série prevista
-                ),
-                go.Scatter(
-                    x=df_arima.index,
-                    y=df_arima,
-                    mode='lines',
-                    name='Dados previstos',
-                    line=dict(color='red')  # Cor para a série prevista
-                )
-            ],
-            'layout': go.Layout(
-                title={'text': 'Previsão ARIMA', 'font': {'size': 24}},
-                xaxis={'title': 'Tempo', 'titlefont': {'size': 18}},
-                yaxis={'title': 'Quantidade de Produtos nas Prateleiras', 'titlefont': {'size': 18}},
-                legend=dict(
-                    orientation="h",
-                    x=0,  # Posição horizontal
-                    y=-0.25,    # Posição vertical (1 = topo)
-                    xanchor='left',  # Alinha o centro da legenda com o x=0.5
-                    yanchor='top'      # Alinha o topo da legenda com y=1
-                ),
-                margin=dict(
-                    l=60, r=20, t=40, b=40  # Ajusta a margem inferior para dar espaço à legenda
-                )
-            )
-        })
-    ], className="col-12 col-md-6")
+    graph_div_arima = create_forecast_graph(df_cortado, df_arima, "Previsão com Arima")
     
     graph_div = [graph_div_holt, graph_div_arima]
 
@@ -485,7 +454,7 @@ def criar_threads_produto():
     df = select()
     
     quant_estoque = obterEstoqueAtual()
-    # Fila
+
     queue = Queue()
     produto = ""
     thread = ""
@@ -555,9 +524,9 @@ def update_graphs(n, dropdown_values):
     
     global produtos
     
-    teste = produtos[produtos['id_produto'].isin(dropdown_values)]
+    produtos_selecionados = produtos[produtos['id_produto'].isin(dropdown_values)]
     
-    for indice, linha in teste.iterrows():
+    for indice, linha in produtos_selecionados.iterrows():
         id = linha.id_produto
         name = linha.nome_produto
         graficos.append(GraficoProduto(go.Figure(data=go.Scatter(x=dff['data'].loc[dff['id_produto'] == id], y=dff['quant'].loc[dff['id_produto'] == id], mode="lines")),id,name))
@@ -583,7 +552,6 @@ def update_graphs(n, dropdown_values):
 #------------------------------------------------------ Ranking ----------------------------------------------------------------#
 
 @callback(
-    # Output('ranking-values', 'data'), 
     [Input('interval-previsao', 'n_intervals')],
     [State('dropdown-values', 'data')]
 )
@@ -593,13 +561,6 @@ def getRanking(n, dropdown_values):
         return None
     thread = Thread(target=ranquamento, args=(df, dropdown_values))
     thread.start()
-    # ranking = ranquamento(df, dropdown_values)
-    
-    # thread.join()
-    
-    # print("store")
-    # print(store)
-    # return store
 
 
 @callback(
@@ -615,8 +576,8 @@ def getRanking(n):
 
 def ranquamento(df, dropdown_values):
     global store
-    prod = df['id_produto']
-    teste = df[prod.isin(dropdown_values)]
+    # prod = df['id_produto']
+    # selected_prod = df.loc[prod.isin(dropdown_values)]
     
     configs = obter_config()
     intervalo = configs['intervalo_padrao'][0]
@@ -624,9 +585,9 @@ def ranquamento(df, dropdown_values):
     
     previsoes = pd.DataFrame(columns=['id_produto', 'quant'])
     
-    produtos_teste = produtos[produtos['id_produto'].isin(dropdown_values)]
+    produtos_selecionados = produtos[produtos['id_produto'].isin(dropdown_values)]
     
-    for id_produto in produtos_teste['id_produto']:
+    for id_produto in produtos_selecionados['id_produto']:
         df_historico = obter_df_historico(id_produto)
         
         df_arima = forecast_arima(df_historico, int(intervalo))
@@ -639,12 +600,9 @@ def ranquamento(df, dropdown_values):
             new_row = {'id_produto': id_produto, 'quant': percentage}
             previsoes.loc[len(previsoes)] = new_row
     
-    # print(previsoes)
-    
     ranking = previsoes.groupby('id_produto').last().reset_index().sort_values(by='quant', ascending=True)['id_produto']
-    df_merged = pd.merge(ranking, produtos_teste, on='id_produto')
+    df_merged = pd.merge(ranking, produtos_selecionados, on='id_produto')
     store['result'] = df_merged['nome_produto']
-    # return df_merged['nome_produto']
 
 @callback(
     Output('dynamic-content', 'children'),
@@ -656,7 +614,7 @@ def adicionar_grafico(data, antigo):
         print("Ranking")
         print(data)
         ranking = data.get('result')
-        return [html.P("Ranking", style={'textAlign':'center'})] + [html.P(teste) for teste in ranking]
+        return [html.P("Ranking", style={'textAlign':'center'})] + [html.P(produto) for produto in ranking]
     return antigo
 
 if __name__ == "__main__":

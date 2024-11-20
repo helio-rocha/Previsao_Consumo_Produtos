@@ -9,14 +9,12 @@ password = "root"
 database = "supermercado"
 
 def select():
-    # connection = mysql.connector.connect(host=host, user=user, password=password, database=database)
     engine = sqlalchemy.create_engine('mysql+pymysql://root:root@localhost:3306/supermercado')
     query = "SELECT horario AS data, quantidade_estoque AS quant, id_produto FROM consumo ORDER BY ID ASC"
     df = pd.read_sql(query, con = engine)
     return df
 
 def obter_config():
-    # connection = mysql.connector.connect(host=host, user=user, password=password, database=database)
     engine = sqlalchemy.create_engine('mysql+pymysql://root:root@localhost:3306/supermercado')
     query = "SELECT intervalo_padrao, grafico_barras, previsao_home, estoque_minimo FROM configuracao WHERE ID = 1"
     df = pd.read_sql(query, con = engine)
@@ -35,19 +33,23 @@ def obterVendas():
     return df_bar
 
 def historico(id_produto):
-    # connection = mysql.connector.connect(host=host, user=user, password=password, database=database)
     engine = sqlalchemy.create_engine('mysql+pymysql://root:root@localhost:3306/supermercado')
-    query = f"SELECT horario AS data, quantidade_estoque AS quant, id_produto FROM consumo WHERE id_produto = {id_produto} ORDER BY ID ASC"
+    # query = f"SELECT horario AS data, quantidade_estoque AS quant, id_produto FROM consumo WHERE id_produto = {id_produto} ORDER BY ID ASC"
+    query = f"SELECT horario AS data, quantidade_estoque AS quant, id_produto FROM consumo WHERE id_produto = {id_produto} AND ID >= (SELECT MIN(LIMITE.ID) FROM (SELECT ID FROM consumo WHERE id_produto = {id_produto} AND quantidade_estoque = 1 ORDER BY ID DESC LIMIT 5) AS LIMITE) ORDER BY ID ASC"
     df = pd.read_sql(query, con = engine)
     return df
 
+# def historico_estoque(id_produto):
+#     engine = sqlalchemy.create_engine('mysql+pymysql://root:root@localhost:3306/supermercado')
+#     query = f"SELECT horario AS data, quantidade_estoque AS quant, id_produto FROM consumo WHERE id_produto = {id_produto} ORDER BY ID ASC"
+#     df = pd.read_sql(query, con = engine)
+#     return df
+
 def saveDB(quant, date, quant_estoque, id_produto):
-    if quant_estoque == 0: quant_estoque = 1
+    # if quant_estoque == 0: quant_estoque = 1
     try:
         connection = mysql.connector.connect(host=host, user=user, password=password, database=database)
-        # print("Conectado ao banco de dados MySQL!")
         
-        # Criando um cursor para executar consultas
         cursor = connection.cursor()
         
         consulta = f"INSERT INTO consumo (horario, id_produto, quantidade_comprada, quantidade_estoque) VALUES ('{date}', {id_produto}, {quant}, {quant_estoque});"
@@ -61,16 +63,13 @@ def saveDB(quant, date, quant_estoque, id_produto):
         try:
             if connection:
                 connection.close()
-                # print("Conexão fechada")
         except:
             pass
 
 def saveConfig(intervalo_padrao, grafico_barras, previsao_home, estoque_minimo):
     try:
         connection = mysql.connector.connect(host=host, user=user, password=password, database=database)
-        # print("Conectado ao banco de dados MySQL!")
         
-        # Criando um cursor para executar consultas
         cursor = connection.cursor()
         
         query = f"UPDATE configuracao SET intervalo_padrao = {intervalo_padrao}, grafico_barras = {grafico_barras}, previsao_home = {previsao_home}, estoque_minimo = {estoque_minimo}"
@@ -84,16 +83,13 @@ def saveConfig(intervalo_padrao, grafico_barras, previsao_home, estoque_minimo):
         try:
             if connection:
                 connection.close()
-                # print("Conexão fechada")
         except:
             pass
 
 def criar_produto(nome):
     try:
         connection = mysql.connector.connect(host=host, user=user, password=password, database=database)
-        # print("Conectado ao banco de dados MySQL!")
         
-        # Criando um cursor para executar consultas
         cursor = connection.cursor()
         
         consulta = f"INSERT INTO produto (nome_produto) VALUES ('{nome}');"
@@ -107,27 +103,21 @@ def criar_produto(nome):
         try:
             if connection:
                 connection.close()
-                # print("Conexão fechada")
         except:
             pass
         
 def get_options_from_db():
     try:
         connection = mysql.connector.connect(host=host, user=user, password=password, database=database)
-        # print("Conectado ao banco de dados MySQL!")
         
-        # Criando um cursor para executar consultas
         cursor = connection.cursor()
         
-        # Consulta SQL
         cursor.execute("SELECT ID, nome_produto FROM produto ORDER BY nome_produto ASC")
         results = cursor.fetchall()
 
-        # Fechando a conexão
         cursor.close()
         connection.close()
 
-        # Convertendo resultados para o formato esperado pelo Dropdown
         options = [{"label": row[1], "value": row[0]} for row in results]
         return options
 

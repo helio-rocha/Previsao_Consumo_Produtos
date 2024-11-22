@@ -33,8 +33,8 @@ store = {"result": ""}
 
 def comprarProduto(queue, id, data_atual):
     while True:
-        tempo = geracaoTempo()
-        quant = geracaoQuant()
+        tempo = geracaoTempo(id)
+        quant = geracaoQuant(id)
         time.sleep(0.5)
         data_atual, date = gerarData(data_atual, tempo)
         data = {"quant": quant, "data": date}
@@ -70,11 +70,14 @@ def converteFloatMinuto(tempo):
 
     return timedelta(minutes=minutos, seconds=segundos)
 
-def geracaoTempo():
+def geracaoTempo(id):
     return 5*random.expovariate(1)
     
-def geracaoQuant():
-    quant = np.random.poisson(6)
+def geracaoQuant(id):
+    if id%2 == 0:
+        quant = int(1.5*np.random.poisson(6))
+    else:
+        quant = 2*np.random.poisson(6)
     return quant
 
 def generate_random_numbers(queue, quant_estoque, id_produto):
@@ -129,7 +132,7 @@ def main():
 
     app.layout = default_layout
         
-    app.run(debug=True, use_reloader=False)
+    app.run(debug=False, use_reloader=False)
     
 @callback(
     Output('url', 'pathname'),
@@ -204,7 +207,7 @@ def display_page(pathname):
                             html.Div(id='dynamic-content', style={'textAlign':'center', 'display': 'block' if configs['previsao_home'][0] else 'none'}),
                             dcc.Interval(
                                 id='interval-previsao',
-                                interval=5000,
+                                interval=3500,
                                 n_intervals=0,
                             ),
                             dcc.Interval(
@@ -255,18 +258,21 @@ def display_page(pathname):
         return html.Div('Página Inexistente')
     
 def adjust_forecast_index(df_forecast, n_steps, df_real):
-    last_date = df_real.index[-1]
-    forecast_dates = pd.date_range(start=last_date, periods=n_steps, freq='min')
+    last_date = df_real.index[-1] + timedelta(minutes=5)
+    forecast_dates = pd.date_range(start=last_date, periods=n_steps, freq='5min')
     df_forecast.index = forecast_dates
     return df_forecast
     
 def forecast_holt(df_holt, n_steps, periods=40):
-    # model = ExponentialSmoothing(endog=df_holt, trend='add').fit(optimized=True)
-    model = ExponentialSmoothing(endog=df_holt, trend='add', seasonal='add', seasonal_periods=periods).fit(optimized=True)
+    model = ExponentialSmoothing(endog=df_holt, trend='add', seasonal='add', seasonal_periods=periods, freq="5min").fit(optimized=True)
 
     forecasting_hw = model.forecast(steps = n_steps)
     
     forecasting_hw = adjust_forecast_index(forecasting_hw, n_steps, df_holt)
+    
+    forecasting_hw = pd.concat([df_holt.iloc[[len(df_holt)-1]], forecasting_hw])
+    
+    forecasting_hw[forecasting_hw < 0] = 0
     
     return forecasting_hw
     
@@ -276,6 +282,10 @@ def forecast_arima(df_arima, n_steps, periods=1):
     forecasting_arima = pd.Series(model.predict(n_periods=n_steps))
 
     forecasting_arima = adjust_forecast_index(forecasting_arima, n_steps, df_arima)
+    
+    forecasting_arima = pd.concat([df_arima.iloc[[len(df_arima)-1]], forecasting_arima])
+    
+    forecasting_arima[forecasting_arima < 0] = 0
     
     return forecasting_arima
 
@@ -288,6 +298,29 @@ def cortar_df(df_historico, intervalo, mult):
     
     return df_cortado
 
+def df_to_series(df_historico):
+    df_historico["data"] = pd.to_datetime(df_historico["data"])
+
+    df_historico = pd.Series(df_historico["quant"].values, index=df_historico["data"])
+    
+    return df_historico
+
+def transformar_series_para_decrescente(series):
+    nova_serie = pd.DataFrame(columns=['quant', 'data'])
+    flag = False
+    acumulado = 0
+    for i in range(len(series)-1, -1, -1):
+        valor = series.iloc[i]
+        if i < len(series)-1 and series.iloc[i] < series.iloc[i+1]:
+            acumulado += 500
+            flag = True
+        if flag == True:
+            valor = series.iloc[i] + acumulado
+        nova_serie.loc[len(nova_serie)] = {"data": series.index[i], "quant": valor}
+    nova_serie = df_to_series(nova_serie)
+    nova_serie = nova_serie.iloc[::-1]
+    return nova_serie
+
 def obter_df_historico(id_produto):
     df_historico = historico(id_produto)
     
@@ -296,8 +329,12 @@ def obter_df_historico(id_produto):
     df_historico = pd.Series(df_historico["quant"].values, index=df_historico["data"])
     
     df_historico = ajustar_df(df_historico)
+    df_grafico = df_historico
     
-    return df_historico
+    df_historico = transformar_series_para_decrescente(df_grafico)
+    df_historico = ajustar_df(df_historico)
+    
+    return df_historico, df_grafico
 
 def ajustar_df(df_historico):
     df_ajustado = df_historico[~df_historico.index.duplicated(keep='last')]
@@ -370,15 +407,15 @@ def criar_forecast_graph(n_clicks, intervalo_padrao, grafico_barras, previsao_ho
 def criar_forecast_graph(n_clicks, intervalo, id_produto):
     if not(id_produto): return
     
-    n_steps = int(intervalo)
+    n_steps = int(int(intervalo)/5) + 1
     
-    df_historico = obter_df_historico(id_produto)
+    df_historico, df_grafico = obter_df_historico(id_produto)
+
+    df_cortado = cortar_df(df_grafico, n_steps, 10)
     
-    df_cortado = cortar_df(df_historico, n_steps, 1.5)
+    df_arima = forecast_arima(df_historico, n_steps, 1)
     
-    df_arima = forecast_arima(df_historico, n_steps, 5)
-    
-    df_holt = forecast_holt(df_historico, n_steps, 77)
+    df_holt = forecast_holt(df_historico, n_steps, 2)
     
     graph_div_holt = create_forecast_graph(df_cortado, df_holt, "Previsão com Holt Winter")
     
@@ -524,7 +561,7 @@ def update_graphs(n, dropdown_values):
     graficos = []
     
     global produtos
-    
+
     produtos_selecionados = produtos[produtos['id_produto'].isin(dropdown_values)]
     
     for indice, linha in produtos_selecionados.iterrows():
@@ -577,8 +614,6 @@ def getRanking(n):
 
 def ranquamento(df, dropdown_values):
     global store
-    # prod = df['id_produto']
-    # selected_prod = df.loc[prod.isin(dropdown_values)]
     
     configs = obter_config()
     intervalo = configs['intervalo_padrao'][0]
@@ -587,10 +622,9 @@ def ranquamento(df, dropdown_values):
     previsoes = pd.DataFrame(columns=['id_produto', 'quant'])
     
     produtos_selecionados = produtos[produtos['id_produto'].isin(dropdown_values)]
-    # print(produtos_selecionados)
     
     for id_produto in produtos_selecionados['id_produto']:
-        df_historico = obter_df_historico(id_produto)
+        df_historico, _ = obter_df_historico(id_produto)
         
         df_arima = forecast_arima(df_historico, int(intervalo))
         
@@ -614,10 +648,11 @@ def ranquamento(df, dropdown_values):
     [State('dropdown-values', 'data')]
 )
 def adicionar_grafico(data, antigo, dropdown_values):
+    if dropdown_values == None: return
     produtos_selecionados = produtos[produtos['id_produto'].isin(dropdown_values)]
     if data['result'] and (not produtos_selecionados.empty):
         ranking = data.get('result')
-        return [html.P("Previsão Padrão de Reabastecimento", style={'textAlign':'center'})] + [html.P(produto) for produto in ranking]
+        return [html.P("Previsão Padrão de Reabastecimento", style={'textAlign':'center', 'font-size': "24px"})] + [html.P(produto, style={'textAlign':'center', 'font-size': "18px"}) for produto in ranking]
     return [html.P("", style={'textAlign':'center'})]
 
 if __name__ == "__main__":

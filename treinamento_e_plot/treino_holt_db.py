@@ -6,7 +6,8 @@ import util.holt as holt
 
 id_produto = 1
 alphas = betas = gammas = np.arange(0.01, 1, 0.10)
-abg = list(itertools.product(alphas, betas, gammas))
+periods = np.arange(2, 200, 1)
+abg = list(itertools.product(alphas, betas, gammas, periods))
 
 # df_historico = util.df_to_series(historico(id_produto))
 df_historico = util.df_to_series(historico_personalizado(id_produto))
@@ -19,5 +20,5 @@ split_index = int(0.8 * len(df_ajustado))
 
 train, test = util.split_test(df_ajustado, split_index)
 
-best_alpha, best_beta, best_gamma, best_mae = holt.tes_optimizer(train, abg, test, 165)
-best_alpha, best_beta, best_mae = holt.des_optimizer(train, alphas, betas, test)
+best_alpha, best_beta, best_gamma, best_mae = holt.tes_optimizer(train, abg, test)
+# best_alpha, best_beta, best_mae = holt.des_optimizer(train, alphas, betas, test)

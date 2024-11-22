@@ -29,12 +29,12 @@ def des_optimizer(train, alphas, betas, test):
     print("best_alpha:", round(best_alpha, 2), "best_beta:", round(best_beta, 2), "best_mae:", round(best_mae, 4))
     return best_alpha, best_beta, best_mae
 
-def tes_optimizer(train, abg, test, periods):
+def tes_optimizer(train, abg, test):
     step = len(test)
     best_alpha, best_beta, best_gamma, best_mae = None, None, None, float("inf")
     cont = 0
     for comb in abg:
-        tes_model = ExponentialSmoothing(train, trend="add", seasonal="add", seasonal_periods=periods).\
+        tes_model = ExponentialSmoothing(train, trend="add", seasonal="add", seasonal_periods=comb[3]).\
             fit(smoothing_level=comb[0], smoothing_trend=comb[1], smoothing_seasonal=comb[2])
         y_pred = tes_model.forecast(step)
         try:
@@ -43,12 +43,12 @@ def tes_optimizer(train, abg, test, periods):
             cont+= 1
             mae = float("inf")
         if mae < best_mae:
-            best_alpha, best_beta, best_gamma, best_mae = comb[0], comb[1], comb[2], mae
-        print([round(comb[0], 2), round(comb[1], 2), round(comb[2], 2), round(mae, 2)])
+            best_alpha, best_beta, best_gamma, best_periods, best_mae = comb[0], comb[1], comb[2], comb[3], mae
+        print([round(comb[0], 2), round(comb[1], 2), round(comb[2], 2), round(comb[3], 2), round(mae, 2)])
 
     print("best_alpha:", round(best_alpha, 2), "best_beta:", round(best_beta, 2), "best_gamma:", round(best_gamma, 2),
-          "best_mae:", round(best_mae, 4))
+          "best_periods:", round(best_periods, 2), "best_mae:", round(best_mae, 4))
     
     print(cont)
 
-    return best_alpha, best_beta, best_gamma, best_mae
+    return best_alpha, best_beta, best_gamma, best_periods, best_mae

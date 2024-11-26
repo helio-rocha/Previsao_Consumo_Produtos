@@ -48,7 +48,5 @@ def tes_optimizer(train, abg, test):
 
     print("best_alpha:", round(best_alpha, 2), "best_beta:", round(best_beta, 2), "best_gamma:", round(best_gamma, 2),
           "best_periods:", round(best_periods, 2), "best_mae:", round(best_mae, 4))
-    
-    print(cont)
 
     return best_alpha, best_beta, best_gamma, best_periods, best_mae

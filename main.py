@@ -35,7 +35,7 @@ def comprarProduto(queue, id, data_atual):
     while True:
         tempo = geracaoTempo(id)
         quant = geracaoQuant(id)
-        time.sleep(0.5)
+        time.sleep(10)
         data_atual, date = gerarData(data_atual, tempo)
         data = {"quant": quant, "data": date}
         queue.put(data)
@@ -168,7 +168,7 @@ def display_page(pathname):
         global selected_itemsGeral
         dropdown_options = get_options_from_db()
         dropdown_options.insert(0, {'label': 'Selecionar Todos', 'value': 'ALL'})
-        layout = html.Div([html.H1(children='Monitoramento de Consumo', style={'textAlign':'center'}),
+        layout = html.Div([html.H1(children='Monitoramento de Consumo', style={'textAlign':'center'}, id='title'),
                             dcc.Interval(id='interval-start', interval=1, n_intervals=0, max_intervals=1),
                             dbc.Modal(
                                 [
@@ -198,7 +198,7 @@ def display_page(pathname):
                             html.Div(id='graphs-container', style={'display': 'flex', 'flex-wrap': 'wrap'}, className="row"),
                             dcc.Interval(
                                 id='interval-component',
-                                interval=500,
+                                interval=10000,
                                 n_intervals=0,
                             ),
                             html.Div([dcc.Graph(
@@ -220,7 +220,7 @@ def display_page(pathname):
         return layout
     elif pathname == '/previsao':
         dropdown_options = get_options_from_db()
-        layout2 = html.Div([html.H1(children='Previsão', style={'textAlign':'center'}),
+        layout2 = html.Div([html.H1(children='Previsão', style={'textAlign':'center'}, id='title'),
                             html.Div([
                             html.Div([html.P(children='Produto', style={'textAlign':'center'}),
                             dcc.Dropdown(
@@ -240,7 +240,7 @@ def display_page(pathname):
                             ])
         return layout2
     elif pathname == '/config':
-        layout2 = html.Div([html.H1(children='Configurações', style={'textAlign':'center'}),
+        layout2 = html.Div([html.H1(children='Configurações', style={'textAlign':'center'}, id='title'),
                             html.Div([
                                 html.P(children='Intervalo de previsão padrão (min)'
                                        ,style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'marginBottom': '20px', 'text-align': 'center'}),
@@ -652,7 +652,7 @@ def adicionar_grafico(data, antigo, dropdown_values):
     produtos_selecionados = produtos[produtos['id_produto'].isin(dropdown_values)]
     if data['result'] and (not produtos_selecionados.empty):
         ranking = data.get('result')
-        return [html.P("Previsão Padrão de Reabastecimento", style={'textAlign':'center', 'font-size': "24px"})] + [html.P(produto, style={'textAlign':'center', 'font-size': "18px"}) for produto in ranking]
+        return [html.P("Previsão Padrão de Reabastecimento", style={'textAlign':'center', 'font-size': "24px"}, id="ranking")] + [html.P(produto, style={'textAlign':'center', 'font-size': "18px"}) for produto in ranking]
     return [html.P("", style={'textAlign':'center'})]
 
 if __name__ == "__main__":
